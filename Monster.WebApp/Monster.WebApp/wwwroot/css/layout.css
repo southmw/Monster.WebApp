@@ -1,0 +1,79 @@
+/* ===== MainLayout Styles ===== */
+.custom-appbar {
+    backdrop-filter: blur(10px);
+}
+
+.mud-theme-light .custom-appbar {
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;
+    box-shadow: 0 2px 8px 0 rgba(249, 115, 22, 0.3), 0 1px 4px 0 rgba(234, 88, 12, 0.2);
+}
+
+.mud-theme-dark .custom-appbar {
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%) !important;
+    box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.5), 0 1px 4px 0 rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.brand-logo {
+    font-weight: 700;
+    color: #ffffff !important;
+}
+
+.custom-drawer {
+}
+
+.mud-theme-light .custom-drawer {
+    border-right: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.mud-theme-dark .custom-drawer {
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.drawer-brand-logo {
+    font-weight: 700;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.mud-theme-dark .drawer-brand-logo {
+    background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.main-content {
+    min-height: 100vh;
+}
+
+/* Light mode background */
+.mud-theme-light .main-content {
+    background: linear-gradient(180deg, #f9fafb 0%, #ffffff 100%);
+}
+
+/* Dark mode background */
+.mud-theme-dark .main-content {
+    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+}
+
+.appbar-icon {
+    color: #ffffff !important;
+}
+
+/* ===== NavMenu Styles ===== */
+.nav-menu-item {
+    border-radius: 8px;
+    margin: 4px 12px;
+    transition: all 0.2s ease;
+}
+
+.mud-theme-light .nav-menu-item:hover {
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.mud-theme-dark .nav-menu-item:hover {
+    background: rgba(129, 140, 248, 0.15);
+}

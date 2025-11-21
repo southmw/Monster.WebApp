@@ -1,0 +1,64 @@
+@using Monster.WebApp.Services.Auth
+@using MudBlazor
+@inject UserService UserService
+@rendermode InteractiveAuto
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudTextField @bind-Value="Email"
+                         Label="이메일"
+                         Required="true"
+                         RequiredError="이메일을 입력하세요"
+                         Variant="Variant.Outlined"
+                         Class="mb-3" />
+            <MudTextField @bind-Value="DisplayName"
+                         Label="표시명"
+                         Required="true"
+                         RequiredError="표시명을 입력하세요"
+                         Variant="Variant.Outlined"
+                         Class="mb-3" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">취소</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!_isValid)">
+            저장
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance? MudDialog { get; set; }
+
+    [Parameter]
+    public int UserId { get; set; }
+
+    [Parameter]
+    public string Email { get; set; } = string.Empty;
+
+    [Parameter]
+    public string DisplayName { get; set; } = string.Empty;
+
+    private MudForm _form = null!;
+    private bool _isValid = false;
+
+    private void Cancel()
+    {
+        MudDialog?.Cancel();
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (_isValid)
+        {
+            var success = await UserService.UpdateUserAsync(UserId, Email, DisplayName);
+            if (success)
+            {
+                MudDialog?.Close(DialogResult.Ok(true));
+            }
+        }
+    }
+}

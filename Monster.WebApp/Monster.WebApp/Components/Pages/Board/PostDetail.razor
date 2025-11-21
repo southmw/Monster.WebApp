@@ -1,0 +1,307 @@
+@page "/board/{categoryUrl}/{postId:int}"
+@using Monster.WebApp.Services
+@using Monster.WebApp.Models
+@inject CategoryService CategoryService
+@inject PostService PostService
+@inject CommentService CommentService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    @if (post == null)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else
+    {
+        <!-- 게시글 본문 -->
+        <div class="post-content-section">
+            <MudText Typo="Typo.h4" Style="font-weight: 700; margin-bottom: 16px;">@post.Title</MudText>
+            <div class="post-meta">
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small" Style="vertical-align: middle;" />
+                    @post.AuthorNickname
+                    <span style="margin: 0 8px;">|</span>
+                    <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" Style="vertical-align: middle;" />
+                    @post.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                    <span style="margin: 0 8px;">|</span>
+                    <MudIcon Icon="@Icons.Material.Outlined.Visibility" Size="Size.Small" Style="vertical-align: middle;" />
+                    @post.ViewCount
+                    <span style="margin: 0 8px;">|</span>
+                    <MudIcon Icon="@Icons.Material.Outlined.ThumbUp" Size="Size.Small" Style="vertical-align: middle;" />
+                    @post.VoteCount
+                </MudText>
+            </div>
+            <MudText Typo="Typo.body1" Style="white-space: pre-wrap; line-height: 1.8; font-size: 15px;">@post.Content</MudText>
+
+            @if (post.Attachments.Any())
+            {
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">첨부파일</MudText>
+                @foreach (var attachment in post.Attachments)
+                {
+                    <MudText Typo="Typo.body2">
+                        <MudIcon Icon="@Icons.Material.Outlined.AttachFile" Size="Size.Small" />
+                        @attachment.OriginalFileName
+                    </MudText>
+                }
+            }
+        </div>
+
+        <MudButtonGroup Variant="Variant.Outlined" Style="margin-bottom: 32px;">
+            <MudButton Color="Color.Success" OnClick="VotePost" StartIcon="@Icons.Material.Outlined.ThumbUp">추천</MudButton>
+            <MudButton Color="Color.Primary" Href="@($"/board/{CategoryUrl}")" StartIcon="@Icons.Material.Outlined.List">목록</MudButton>
+        </MudButtonGroup>
+
+        <!-- 댓글 섹션 -->
+        <div class="comment-section">
+            <MudText Typo="Typo.h6" Style="font-weight: 700; margin-bottom: 20px;">
+                <MudIcon Icon="@Icons.Material.Outlined.Comment" Style="vertical-align: middle;" />
+                댓글 @post.Comments.Count 개
+            </MudText>
+
+            <div class="comment-form">
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 600; margin-bottom: 12px;">댓글 작성</MudText>
+                <MudGrid Spacing="1">
+                    <MudItem xs="6" sm="6">
+                        <MudTextField @bind-Value="commentNickname" Label="작성자" Variant="Variant.Outlined"
+                                      MaxLength="50" FullWidth="true"
+                                      Class="compact-input" Margin="Margin.Dense" />
+                    </MudItem>
+                    <MudItem xs="6" sm="4">
+                        <MudTextField @bind-Value="commentPassword" Label="비밀번호" Variant="Variant.Outlined"
+                                      InputType="InputType.Password" FullWidth="true"
+                                      Class="compact-input" Margin="Margin.Dense" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="commentContent" Label="댓글 내용" Variant="Variant.Outlined"
+                                      Lines="3" Class="compact-input" Margin="Margin.Dense" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Medium"
+                                   OnClick="SubmitComment" Disabled="isSubmittingComment"
+                                   StartIcon="@Icons.Material.Outlined.Send">
+                            @(isSubmittingComment ? "등록 중..." : "댓글 등록")
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+            </div>
+
+            @foreach (var comment in post.Comments.Where(c => c.ParentCommentId == null))
+            {
+                <div class="comment-item">
+                    <MudText Typo="Typo.body2" Style="font-weight: 600; color: #374151;">
+                        @comment.AuthorNickname
+                        <span style="font-weight: 400; color: #9ca3af; margin-left: 8px;">
+                            @comment.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                        </span>
+                    </MudText>
+                    <MudText Typo="Typo.body1" Style="margin-top: 12px; line-height: 1.6;">@comment.Content</MudText>
+
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                               OnClick="() => ShowReplyForm(comment.Id)" Style="margin-top: 8px;"
+                               StartIcon="@Icons.Material.Outlined.Reply">
+                        답글
+                    </MudButton>
+
+                    @if (replyToCommentId == comment.Id)
+                    {
+                        <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; margin-top: 12px;">
+                            <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">답글 작성</MudText>
+                            <MudGrid Spacing="1">
+                                <MudItem xs="6" sm="3">
+                                    <MudTextField @bind-Value="replyNickname" Label="작성자" Variant="Variant.Outlined"
+                                                  MaxLength="50" FullWidth="true"
+                                                  Class="compact-input" Margin="Margin.Dense" />
+                                </MudItem>
+                                <MudItem xs="6" sm="3">
+                                    <MudTextField @bind-Value="replyPassword" Label="비밀번호" Variant="Variant.Outlined"
+                                                  InputType="InputType.Password" FullWidth="true"
+                                                  Class="compact-input" Margin="Margin.Dense" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField @bind-Value="replyContent" Label="답글 내용" Variant="Variant.Outlined"
+                                                  Lines="2" Class="compact-input" Margin="Margin.Dense" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudButtonGroup Size="Size.Small">
+                                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                                   OnClick="SubmitReply" Disabled="isSubmittingReply">
+                                            @(isSubmittingReply ? "등록 중..." : "등록")
+                                        </MudButton>
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+                                                   OnClick="CancelReply">
+                                            취소
+                                        </MudButton>
+                                    </MudButtonGroup>
+                                </MudItem>
+                            </MudGrid>
+                        </div>
+                    }
+
+                    @foreach (var reply in post.Comments.Where(c => c.ParentCommentId == comment.Id))
+                    {
+                        <div class="reply-item">
+                            <MudText Typo="Typo.body2" Style="font-weight: 600; color: #374151;">
+                                <MudIcon Icon="@Icons.Material.Outlined.SubdirectoryArrowRight" Size="Size.Small" Style="vertical-align: middle;" />
+                                @reply.AuthorNickname
+                                <span style="font-weight: 400; color: #9ca3af; margin-left: 8px;">
+                                    @reply.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                                </span>
+                            </MudText>
+                            <MudText Typo="Typo.body2" Style="margin-top: 8px; line-height: 1.6;">@reply.Content</MudText>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</MudContainer>
+
+@code {
+    [Parameter]
+    public string CategoryUrl { get; set; } = string.Empty;
+
+    [Parameter]
+    public int PostId { get; set; }
+
+    private Post? post;
+
+    // Comment fields
+    private string commentNickname = string.Empty;
+    private string commentPassword = string.Empty;
+    private string commentContent = string.Empty;
+    private bool isSubmittingComment = false;
+
+    // Reply fields
+    private int? replyToCommentId = null;
+    private string replyNickname = string.Empty;
+    private string replyPassword = string.Empty;
+    private string replyContent = string.Empty;
+    private bool isSubmittingReply = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPostAsync();
+    }
+
+    private async Task LoadPostAsync()
+    {
+        post = await PostService.GetPostByIdAsync(PostId);
+
+        if (post != null)
+        {
+            await PostService.IncrementViewCountAsync(PostId);
+        }
+    }
+
+    private async Task VotePost()
+    {
+        if (await PostService.VotePostAsync(PostId))
+        {
+            await LoadPostAsync();
+        }
+    }
+
+    private async Task SubmitComment()
+    {
+        if (string.IsNullOrWhiteSpace(commentNickname) ||
+            string.IsNullOrWhiteSpace(commentPassword) ||
+            string.IsNullOrWhiteSpace(commentContent))
+        {
+            Snackbar.Add("모든 필드를 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        isSubmittingComment = true;
+
+        try
+        {
+            var comment = new Comment
+            {
+                PostId = PostId,
+                Content = commentContent,
+                AuthorNickname = commentNickname
+            };
+
+            await CommentService.CreateCommentAsync(comment, commentPassword);
+
+            // Clear form
+            commentNickname = string.Empty;
+            commentPassword = string.Empty;
+            commentContent = string.Empty;
+
+            Snackbar.Add("댓글이 등록되었습니다.", Severity.Success);
+            await LoadPostAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"댓글 등록 중 오류가 발생했습니다: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSubmittingComment = false;
+        }
+    }
+
+    private void ShowReplyForm(int commentId)
+    {
+        replyToCommentId = commentId;
+        replyNickname = string.Empty;
+        replyPassword = string.Empty;
+        replyContent = string.Empty;
+    }
+
+    private void CancelReply()
+    {
+        replyToCommentId = null;
+        replyNickname = string.Empty;
+        replyPassword = string.Empty;
+        replyContent = string.Empty;
+    }
+
+    private async Task SubmitReply()
+    {
+        if (string.IsNullOrWhiteSpace(replyNickname) ||
+            string.IsNullOrWhiteSpace(replyPassword) ||
+            string.IsNullOrWhiteSpace(replyContent))
+        {
+            Snackbar.Add("모든 필드를 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        if (replyToCommentId == null)
+        {
+            return;
+        }
+
+        isSubmittingReply = true;
+
+        try
+        {
+            var reply = new Comment
+            {
+                PostId = PostId,
+                ParentCommentId = replyToCommentId,
+                Content = replyContent,
+                AuthorNickname = replyNickname
+            };
+
+            await CommentService.CreateCommentAsync(reply, replyPassword);
+
+            CancelReply();
+
+            Snackbar.Add("답글이 등록되었습니다.", Severity.Success);
+            await LoadPostAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"답글 등록 중 오류가 발생했습니다: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSubmittingReply = false;
+        }
+    }
+}

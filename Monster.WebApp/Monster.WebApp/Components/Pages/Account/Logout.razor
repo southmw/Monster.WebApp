@@ -1,0 +1,13 @@
+@page "/account/logout"
+@using Monster.WebApp.Services
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await AuthService.LogoutAsync();
+        NavigationManager.NavigateTo("/", forceLoad: true);
+    }
+}

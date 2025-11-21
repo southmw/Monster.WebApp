@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Monster.WebApp/Monster.WebApp.Client/Monster.WebApp.Client.csproj" />
+  <Project Path="Monster.WebApp/Monster.WebApp/Monster.WebApp.csproj" />
+</Solution>

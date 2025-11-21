@@ -1,0 +1,60 @@
+@page "/board"
+@inject CategoryService CategoryService
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<div class="page-header">
+    <MudText Typo="Typo.h4" Style="font-weight: 700; margin-bottom: 8px;">게시판</MudText>
+    <MudText Typo="Typo.body1" Color="Color.Secondary">
+        원하는 게시판을 선택하세요
+    </MudText>
+</div>
+
+@if (categories == null)
+{
+    <div style="display: flex; justify-content: center; padding: 64px 0;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+    </div>
+}
+else
+{
+    <MudGrid Spacing="3">
+        @foreach (var category in categories)
+        {
+            var index = categories.IndexOf(category);
+            var colors = new[] { "#6366f1", "#ec4899", "#10b981" };
+            var bgColor = colors[index % colors.Length];
+
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="category-card" Elevation="0" @onclick="() => NavigateToCategory(category.UrlSlug)"
+                          Style="padding: 24px; height: 100%;">
+                    <div style="display: flex; align-items: center; margin-bottom: 16px;">
+                        <div class="category-icon" style="background: linear-gradient(135deg, @bgColor 0%, @(bgColor)99 100%); margin-bottom: 0; margin-right: 12px;">
+                            <MudIcon Icon="@Icons.Material.Filled.Forum" Style="color: white;" Size="Size.Large" />
+                        </div>
+                        <MudText Typo="Typo.h6" Style="font-weight: 600;">
+                            @category.Name
+                        </MudText>
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        @category.Description
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private List<Category>? categories;
+
+    protected override async Task OnInitializedAsync()
+    {
+        categories = await CategoryService.GetAllActiveCategoriesAsync();
+    }
+
+    private void NavigateToCategory(string urlSlug)
+    {
+        NavigationManager.NavigateTo($"/board/{urlSlug}");
+    }
+}

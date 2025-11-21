@@ -1,0 +1,92 @@
+@using Monster.WebApp.Services.Board
+@using MudBlazor
+@inject CategoryService CategoryService
+@rendermode InteractiveAuto
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudTextField @bind-Value="Name"
+                         Label="카테고리 이름"
+                         Required="true"
+                         RequiredError="카테고리 이름을 입력하세요"
+                         Variant="Variant.Outlined"
+                         Class="mb-3" />
+
+            <MudTextField @bind-Value="UrlSlug"
+                         Label="URL Slug"
+                         Required="true"
+                         RequiredError="URL Slug를 입력하세요"
+                         HelperText="영문, 숫자, 하이픈만 사용 (예: free-board)"
+                         Variant="Variant.Outlined"
+                         Class="mb-3" />
+
+            <MudTextField @bind-Value="Description"
+                         Label="설명"
+                         Variant="Variant.Outlined"
+                         Lines="3"
+                         Class="mb-3" />
+
+            <MudNumericField @bind-Value="DisplayOrder"
+                            Label="표시 순서"
+                            Required="true"
+                            Min="0"
+                            Variant="Variant.Outlined"
+                            Class="mb-3" />
+
+            <MudSwitch @bind-Value="IsActive"
+                      Label="활성화"
+                      Color="Color.Primary" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">취소</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!_isValid)">
+            저장
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance? MudDialog { get; set; }
+
+    [Parameter]
+    public int CategoryId { get; set; }
+
+    [Parameter]
+    public string Name { get; set; } = string.Empty;
+
+    [Parameter]
+    public string UrlSlug { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Description { get; set; } = string.Empty;
+
+    [Parameter]
+    public int DisplayOrder { get; set; }
+
+    [Parameter]
+    public bool IsActive { get; set; }
+
+    private MudForm _form = null!;
+    private bool _isValid = false;
+
+    private void Cancel()
+    {
+        MudDialog?.Cancel();
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (_isValid)
+        {
+            var success = await CategoryService.UpdateCategoryAsync(CategoryId, Name, UrlSlug, Description, DisplayOrder, IsActive);
+            if (success)
+            {
+                MudDialog?.Close(DialogResult.Ok(true));
+            }
+        }
+    }
+}

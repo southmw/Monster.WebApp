@@ -1,0 +1,163 @@
+@page "/admin/categories"
+@using Monster.WebApp.Services.Board
+@using Monster.WebApp.Models.Board
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = "AdminOnly")]
+@inject CategoryService CategoryService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+
+<PageTitle>카테고리 관리</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-6" Style="font-weight: 600;">카테고리 관리</MudText>
+
+    @if (_isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else
+    {
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <!-- Action Buttons -->
+                <MudStack Row="true" Spacing="2" Class="mb-4" Justify="Justify.FlexEnd">
+                    <MudButton Variant="Variant.Filled"
+                              Color="Color.Primary"
+                              StartIcon="@Icons.Material.Filled.Add"
+                              OnClick="CreateCategoryAsync">
+                        새 카테고리
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                              Color="Color.Secondary"
+                              StartIcon="@Icons.Material.Filled.Refresh"
+                              OnClick="LoadCategoriesAsync">
+                        새로고침
+                    </MudButton>
+                </MudStack>
+
+                <!-- Categories Table -->
+                <MudTable Items="@_categories" Hover="true" Dense="true" Class="mt-4">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>이름</MudTh>
+                        <MudTh>URL Slug</MudTh>
+                        <MudTh>설명</MudTh>
+                        <MudTh>순서</MudTh>
+                        <MudTh>게시글 수</MudTh>
+                        <MudTh>상태</MudTh>
+                        <MudTh>작업</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="ID">@context.Id</MudTd>
+                        <MudTd DataLabel="이름">@context.Name</MudTd>
+                        <MudTd DataLabel="URL Slug">@context.UrlSlug</MudTd>
+                        <MudTd DataLabel="설명">@(string.IsNullOrEmpty(context.Description) ? "-" : context.Description)</MudTd>
+                        <MudTd DataLabel="순서">@context.DisplayOrder</MudTd>
+                        <MudTd DataLabel="게시글 수">@context.Posts.Count(p => !p.IsDeleted)</MudTd>
+                        <MudTd DataLabel="상태">
+                            <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">
+                                @(context.IsActive ? "활성" : "비활성")
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="작업">
+                            <MudStack Row="true" Spacing="1">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                             Color="Color.Info"
+                                             Size="Size.Small"
+                                             OnClick="@(() => EditCategoryAsync(context))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                             Color="Color.Error"
+                                             Size="Size.Small"
+                                             OnClick="@(() => DeleteCategoryAsync(context))" />
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudCardContent>
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    private bool _isLoading = true;
+    private List<Category> _categories = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCategoriesAsync();
+        _isLoading = false;
+    }
+
+    private async Task LoadCategoriesAsync()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        _categories = await CategoryService.GetAllActiveCategoriesAsync();
+
+        _isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task CreateCategoryAsync()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<CreateCategoryDialog>("새 카테고리 추가", options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadCategoriesAsync();
+            Snackbar.Add("카테고리가 생성되었습니다.", Severity.Success);
+        }
+    }
+
+    private async Task EditCategoryAsync(Category category)
+    {
+        var parameters = new DialogParameters<EditCategoryDialog>
+        {
+            { x => x.CategoryId, category.Id },
+            { x => x.Name, category.Name },
+            { x => x.UrlSlug, category.UrlSlug },
+            { x => x.Description, category.Description },
+            { x => x.DisplayOrder, category.DisplayOrder },
+            { x => x.IsActive, category.IsActive }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<EditCategoryDialog>("카테고리 수정", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadCategoriesAsync();
+            Snackbar.Add("카테고리가 수정되었습니다.", Severity.Success);
+        }
+    }
+
+    private async Task DeleteCategoryAsync(Category category)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "확인",
+            $"'{category.Name}' 카테고리를 삭제하시겠습니까? 이 카테고리에 게시글이 있으면 삭제할 수 없습니다.",
+            yesText: "삭제",
+            cancelText: "취소"
+        );
+
+        if (confirmed == true)
+        {
+            var success = await CategoryService.DeleteCategoryAsync(category.Id);
+            if (success)
+            {
+                await LoadCategoriesAsync();
+                Snackbar.Add("카테고리가 삭제되었습니다.", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("카테고리를 삭제할 수 없습니다. 게시글이 존재합니다.", Severity.Error);
+            }
+        }
+    }
+}

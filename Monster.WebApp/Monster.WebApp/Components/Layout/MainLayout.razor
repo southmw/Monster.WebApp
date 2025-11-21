@@ -1,0 +1,140 @@
+@using Monster.WebApp.Shared
+@using Monster.WebApp.Services
+@using Monster.WebApp.Models
+@using System.Security.Claims
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+@inject IHttpContextAccessor HttpContextAccessor
+@inject IJSRuntime JS
+@inherits LayoutComponentBase
+
+<MudThemeProvider @bind-IsDarkMode="@_isDarkMode" Theme="@CustomTheme.Theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="0"
+               Class="custom-appbar"
+               dense="true"
+               Style="@GetAppBarStyle()">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                       Class="appbar-icon"
+                       Edge="Edge.Start"
+                       @onclick="@DrawerToggle" />
+        <MudText Typo="Typo.h5" Class="brand-logo ml-2">Southmw</MudText>
+        <MudSpacer />
+        @if (IsUserAuthenticated())
+        {
+            <MudText Typo="Typo.body2" Class="mr-3" Style="color: white;">
+                @GetDisplayName() 님
+            </MudText>
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Inherit"
+                       StartIcon="@Icons.Material.Filled.Logout"
+                       Href="/api/auth/logout"
+                       Class="mr-2">
+                로그아웃
+            </MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Inherit"
+                       StartIcon="@Icons.Material.Filled.Login"
+                       Href="/account/login"
+                       Class="mr-2">
+                로그인
+            </MudButton>
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Inherit"
+                       StartIcon="@Icons.Material.Filled.PersonAdd"
+                       Href="/account/register">
+                회원가입
+            </MudButton>
+        }
+        <MudIconButton Icon="@Icons.Material.Outlined.Notifications"
+                       Class="appbar-icon ml-3" />
+        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                       Color="Color.Inherit"
+                       @onclick="@ToggleTheme"
+                       Class="appbar-icon ml-2" />
+    </MudAppBar>
+    <MudDrawer @bind-Open="_drawerOpen"
+               Elevation="0"
+               Variant="@DrawerVariant.Responsive"
+               ClipMode="DrawerClipMode.Always"
+               Class="custom-drawer">
+        <MudDrawerHeader Style="padding: 24px;">
+            <MudText Typo="Typo.h6" Class="drawer-brand-logo">Southmw</MudText>
+        </MudDrawerHeader>
+        <NavMenu />
+    </MudDrawer>
+    <MudMainContent Class="main-content">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Style="padding: 32px 24px;">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+    private bool _isDarkMode = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                _isDarkMode = await JS.InvokeAsync<bool>("themeManager.loadTheme");
+                StateHasChanged();
+            }
+            catch
+            {
+                // JavaScript 함수가 아직 로드되지 않은 경우 무시
+            }
+        }
+    }
+
+    private async Task ToggleTheme()
+    {
+        _isDarkMode = !_isDarkMode;
+        try
+        {
+            await JS.InvokeVoidAsync("themeManager.saveTheme", _isDarkMode);
+        }
+        catch
+        {
+            // localStorage 저장 실패 시 무시 (테마는 여전히 전환됨)
+        }
+    }
+
+    private void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private bool IsUserAuthenticated()
+    {
+        return HttpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated == true;
+    }
+
+    private string GetDisplayName()
+    {
+        var displayNameClaim = HttpContextAccessor.HttpContext?.User?.FindFirst("DisplayName");
+        return displayNameClaim?.Value ?? "사용자";
+    }
+
+    private string GetAppBarStyle()
+    {
+        if (_isDarkMode)
+        {
+            return "background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%) !important; box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.5), 0 1px 4px 0 rgba(0, 0, 0, 0.3); border-bottom: 1px solid rgba(99, 102, 241, 0.2);";
+        }
+        else
+        {
+            return "background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important; box-shadow: 0 2px 8px 0 rgba(249, 115, 22, 0.3), 0 1px 4px 0 rgba(234, 88, 12, 0.2);";
+        }
+    }
+}

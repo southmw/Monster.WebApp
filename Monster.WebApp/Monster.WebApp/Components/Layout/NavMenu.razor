@@ -1,0 +1,57 @@
+@using Monster.WebApp.Services.Auth
+@inject RoleService RoleService
+@rendermode InteractiveServer
+
+<MudNavMenu Style="padding: 8px 0;">
+    <MudNavLink Href=""
+                Match="NavLinkMatch.All"
+                Icon="@Icons.Material.Outlined.Home"
+                IconColor="Color.Primary"
+                Class="nav-menu-item">
+        홈
+    </MudNavLink>
+    <MudNavLink Href="board"
+                Icon="@Icons.Material.Outlined.Forum"
+                IconColor="Color.Secondary"
+                Class="nav-menu-item">
+        게시판
+    </MudNavLink>
+    @if (_isAdmin)
+    {
+        <MudDivider Class="my-2" />
+        <MudNavGroup Title="관리자"
+                     Icon="@Icons.Material.Outlined.AdminPanelSettings"
+                     IconColor="Color.Error"
+                     Expanded="false"
+                     Class="nav-menu-item">
+            <MudNavLink Href="admin"
+                        Icon="@Icons.Material.Outlined.Dashboard"
+                        IconColor="Color.Error"
+                        Class="nav-menu-item">
+                대시보드
+            </MudNavLink>
+            <MudNavLink Href="admin/users"
+                        Icon="@Icons.Material.Outlined.People"
+                        IconColor="Color.Error"
+                        Class="nav-menu-item">
+                사용자 관리
+            </MudNavLink>
+            <MudNavLink Href="admin/categories"
+                        Icon="@Icons.Material.Outlined.Category"
+                        IconColor="Color.Error"
+                        Class="nav-menu-item">
+                카테고리 관리
+            </MudNavLink>
+        </MudNavGroup>
+    }
+</MudNavMenu>
+
+@code {
+    private bool _isAdmin = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isAdmin = await RoleService.IsAdminAsync();
+    }
+}
+

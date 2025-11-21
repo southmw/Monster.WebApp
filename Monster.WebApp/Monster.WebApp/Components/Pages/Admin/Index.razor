@@ -1,0 +1,162 @@
+@page "/admin"
+@using Monster.WebApp.Services.Auth
+@using Monster.WebApp.Services.Board
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = "AdminOnly")]
+@inject UserService UserService
+@inject CategoryService CategoryService
+@inject PostService PostService
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<PageTitle>관리자 대시보드</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-6" Style="font-weight: 600;">관리자 대시보드</MudText>
+
+    @if (_isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else
+    {
+        <MudGrid Spacing="3">
+            <!-- Statistics Cards -->
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2" Class="stat-card">
+                    <MudCardContent>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">전체 사용자</MudText>
+                                <MudText Typo="Typo.h4" Style="font-weight: 600;">@_totalUsers</MudText>
+                            </div>
+                            <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" Size="Size.Large" />
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2" Class="stat-card">
+                    <MudCardContent>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">활성 사용자</MudText>
+                                <MudText Typo="Typo.h4" Style="font-weight: 600;">@_activeUsers</MudText>
+                            </div>
+                            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Color="Color.Success" Size="Size.Large" />
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2" Class="stat-card">
+                    <MudCardContent>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">전체 카테고리</MudText>
+                                <MudText Typo="Typo.h4" Style="font-weight: 600;">@_totalCategories</MudText>
+                            </div>
+                            <MudIcon Icon="@Icons.Material.Filled.Category" Color="Color.Info" Size="Size.Large" />
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2" Class="stat-card">
+                    <MudCardContent>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">전체 게시글</MudText>
+                                <MudText Typo="Typo.h4" Style="font-weight: 600;">@_totalPosts</MudText>
+                            </div>
+                            <MudIcon Icon="@Icons.Material.Filled.Article" Color="Color.Warning" Size="Size.Large" />
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Quick Actions -->
+            <MudItem xs="12">
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-4" Style="font-weight: 600;">빠른 작업</MudText>
+                        <MudStack Row="true" Spacing="2">
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Primary"
+                                      StartIcon="@Icons.Material.Filled.People"
+                                      Href="/admin/users">
+                                사용자 관리
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Secondary"
+                                      StartIcon="@Icons.Material.Filled.Category"
+                                      Href="/board">
+                                카테고리 관리
+                            </MudButton>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Recent Users -->
+            <MudItem xs="12">
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-4" Style="font-weight: 600;">최근 가입 사용자</MudText>
+                        <MudTable Items="@_recentUsers" Hover="true" Dense="true">
+                            <HeaderContent>
+                                <MudTh>사용자명</MudTh>
+                                <MudTh>이메일</MudTh>
+                                <MudTh>표시명</MudTh>
+                                <MudTh>역할</MudTh>
+                                <MudTh>가입일</MudTh>
+                                <MudTh>상태</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="사용자명">@context.Username</MudTd>
+                                <MudTd DataLabel="이메일">@context.Email</MudTd>
+                                <MudTd DataLabel="표시명">@context.DisplayName</MudTd>
+                                <MudTd DataLabel="역할">
+                                    @string.Join(", ", context.UserRoles.Select(ur => ur.Role.DisplayName))
+                                </MudTd>
+                                <MudTd DataLabel="가입일">@context.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudTd>
+                                <MudTd DataLabel="상태">
+                                    <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">
+                                        @(context.IsActive ? "활성" : "비활성")
+                                    </MudChip>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private bool _isLoading = true;
+    private int _totalUsers = 0;
+    private int _activeUsers = 0;
+    private int _totalCategories = 0;
+    private int _totalPosts = 0;
+    private List<Monster.WebApp.Models.Auth.User> _recentUsers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardDataAsync();
+        _isLoading = false;
+    }
+
+    private async Task LoadDashboardDataAsync()
+    {
+        _totalUsers = await UserService.GetTotalUserCountAsync();
+        _activeUsers = await UserService.GetActiveUserCountAsync();
+        _totalCategories = (await CategoryService.GetAllActiveCategoriesAsync()).Count;
+        _totalPosts = await PostService.GetTotalPostCountAsync();
+        _recentUsers = await UserService.GetRecentUsersAsync(5);
+    }
+}

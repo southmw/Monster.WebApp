@@ -1,0 +1,41 @@
+/* ===== Account Pages Styles ===== */
+.auth-container {
+    padding: 40px;
+    border-radius: 16px;
+}
+
+.mud-theme-light .auth-container {
+    background: #ffffff;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.mud-theme-dark .auth-container {
+    background: #1e293b;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.auth-form {
+    width: 100%;
+}
+
+.auth-form .mud-input-root {
+    border-radius: 8px;
+}
+
+.auth-form .mud-button-root {
+    border-radius: 8px;
+    text-transform: none;
+    font-weight: 600;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    .auth-container {
+        padding: 24px;
+    }
+}

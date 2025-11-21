@@ -1,0 +1,84 @@
+@using Monster.WebApp.Services.Auth
+@using Monster.WebApp.Models.Auth
+@using MudBlazor
+@inject RoleService RoleService
+@inject UserService UserService
+@rendermode InteractiveAuto
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.h6" Class="mb-4">@Username 사용자의 역할 관리</MudText>
+
+        @if (_isLoading)
+        {
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        }
+        else
+        {
+            <MudStack Spacing="3">
+                @foreach (var role in _allRoles)
+                {
+                    var roleId = role.Id;
+                    var isAssigned = _assignedRoleIds.Contains(roleId);
+                    <MudCheckBox Value="@isAssigned"
+                                Label="@role.DisplayName"
+                                Color="Color.Primary"
+                                ValueChanged="@(async (bool value) => await ToggleRoleAsync(roleId, value))" />
+                }
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">닫기</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance? MudDialog { get; set; }
+
+    [Parameter]
+    public int UserId { get; set; }
+
+    [Parameter]
+    public string Username { get; set; } = string.Empty;
+
+    private bool _isLoading = true;
+    private List<Role> _allRoles = new();
+    private HashSet<int> _assignedRoleIds = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRolesAsync();
+        _isLoading = false;
+    }
+
+    private async Task LoadRolesAsync()
+    {
+        _allRoles = await RoleService.GetAllRolesAsync();
+        var user = await UserService.GetUserByIdAsync(UserId);
+        if (user != null)
+        {
+            _assignedRoleIds = user.UserRoles.Select(ur => ur.RoleId).ToHashSet();
+        }
+    }
+
+    private async Task ToggleRoleAsync(int roleId, bool isAssigned)
+    {
+        if (isAssigned)
+        {
+            await RoleService.AssignRoleAsync(UserId, roleId);
+            _assignedRoleIds.Add(roleId);
+        }
+        else
+        {
+            await RoleService.RemoveRoleAsync(UserId, roleId);
+            _assignedRoleIds.Remove(roleId);
+        }
+    }
+
+    private void Close()
+    {
+        MudDialog?.Close(DialogResult.Ok(true));
+    }
+}

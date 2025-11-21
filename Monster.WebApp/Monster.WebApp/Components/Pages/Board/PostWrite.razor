@@ -1,0 +1,172 @@
+@page "/board/{categoryUrl}/write"
+@using Monster.WebApp.Services
+@using Monster.WebApp.Models
+@inject CategoryService CategoryService
+@inject PostService PostService
+@inject CategoryAccessService CategoryAccessService
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    @if (category == null)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (!canWrite)
+    {
+        <MudPaper Elevation="0" Style="padding: 64px; text-align: center; border: 1px solid rgba(0, 0, 0, 0.08);">
+            <MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Large" Color="Color.Error" Style="margin-bottom: 16px;" />
+            <MudText Typo="Typo.h6" Color="Color.Error">글쓰기 권한이 없습니다</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top: 8px;">
+                이 게시판은 권한이 있는 사용자만 글을 작성할 수 있습니다.
+            </MudText>
+            @if (!AuthService.IsAuthenticated())
+            {
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Href="/account/login"
+                           Style="margin-top: 24px;">
+                    로그인하기
+                </MudButton>
+            }
+        </MudPaper>
+    }
+    else
+    {
+        <MudText Typo="Typo.h4" Style="font-weight: 700; margin-bottom: 24px;">
+            <MudIcon Icon="@Icons.Material.Outlined.Create" Style="vertical-align: middle;" />
+            글쓰기 - @category.Name
+        </MudText>
+
+        <div class="write-container">
+            <div class="form-section">
+                <MudTextField @bind-Value="title" Label="제목" Variant="Variant.Outlined"
+                              Required="true" FullWidth="true" Class="compact-input" Margin="Margin.Dense" />
+            </div>
+
+            @if (!isAuthenticated)
+            {
+                <MudGrid Spacing="1" Class="form-section">
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="authorNickname" Label="작성자" Variant="Variant.Outlined"
+                                      Required="true" MaxLength="50" FullWidth="false" Style="max-width: 250px;"
+                                      Class="compact-input" Margin="Margin.Dense" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="password" Label="비밀번호" Variant="Variant.Outlined"
+                                      Required="true" InputType="InputType.Password"
+                                      HelperText="게시글 수정/삭제 시 필요합니다" FullWidth="false" Style="max-width: 250px;"
+                                      Class="compact-input" Margin="Margin.Dense" />
+                    </MudItem>
+                </MudGrid>
+            }
+
+            <div class="form-section">
+                <MudTextField @bind-Value="content" Label="내용" Variant="Variant.Outlined"
+                              Required="true" Lines="25" FullWidth="true" Class="compact-input" Margin="Margin.Dense" />
+            </div>
+
+            <MudButtonGroup Size="Size.Medium" Style="margin-top: 16px;">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           OnClick="SubmitPost" Disabled="isSubmitting"
+                           StartIcon="@Icons.Material.Outlined.Send">
+                    @(isSubmitting ? "등록 중..." : "등록")
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+                           Href="@($"/board/{CategoryUrl}")"
+                           StartIcon="@Icons.Material.Outlined.Cancel">
+                    취소
+                </MudButton>
+            </MudButtonGroup>
+        </div>
+    }
+</MudContainer>
+
+@code {
+    [Parameter]
+    public string CategoryUrl { get; set; } = string.Empty;
+
+    private Category? category;
+    private string title = string.Empty;
+    private string authorNickname = string.Empty;
+    private string password = string.Empty;
+    private string content = string.Empty;
+    private bool isSubmitting = false;
+    private bool canWrite = false;
+    private bool isAuthenticated = false;
+    private User? currentUser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        category = await CategoryService.GetCategoryByUrlSlugAsync(CategoryUrl);
+
+        if (category == null)
+        {
+            NavigationManager.NavigateTo("/board");
+            return;
+        }
+
+        // Check write permissions
+        canWrite = await CategoryAccessService.CanWriteToCategoryAsync(category.Id);
+
+        // Get current user info
+        isAuthenticated = AuthService.IsAuthenticated();
+        if (isAuthenticated)
+        {
+            currentUser = await AuthService.GetCurrentUserAsync();
+            if (currentUser != null)
+            {
+                authorNickname = currentUser.DisplayName; // Pre-fill for authenticated users
+            }
+        }
+    }
+
+    private async Task SubmitPost()
+    {
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(content))
+        {
+            Snackbar.Add("제목과 내용을 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        // Validate anonymous post fields
+        if (!isAuthenticated)
+        {
+            if (string.IsNullOrWhiteSpace(authorNickname) || string.IsNullOrWhiteSpace(password))
+            {
+                Snackbar.Add("작성자와 비밀번호를 입력해주세요.", Severity.Warning);
+                return;
+            }
+        }
+
+        if (category == null)
+        {
+            return;
+        }
+
+        isSubmitting = true;
+
+        try
+        {
+            var post = new Post
+            {
+                CategoryId = category.Id,
+                Title = title,
+                Content = content,
+                AuthorNickname = authorNickname
+            };
+
+            var createdPost = await PostService.CreatePostAsync(post, password);
+
+            Snackbar.Add("게시글이 등록되었습니다.", Severity.Success);
+            NavigationManager.NavigateTo($"/board/{CategoryUrl}/{createdPost.Id}");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"게시글 등록 중 오류가 발생했습니다: {ex.Message}", Severity.Error);
+            isSubmitting = false;
+        }
+    }
+}

@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet add:*)",
+      "Bash(cat:*)",
+      "Bash(echo:*)",
+      "Bash(\"c:\\Work\\20.Project\\Monster.WebApp\\Monster.WebApp\\Monster.WebApp\\Components\\Layout\\MainLayout.razor\")",
+      "Bash(dotnet ef migrations:*)",
+      "Bash(dotnet ef database update:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet run:*)",
+      "Bash(taskkill:*)",
+      "Bash(nul)",
+      "Bash(Get-Process -Name dotnet -ErrorAction SilentlyContinue)",
+      "Bash(Stop-Process -Force)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

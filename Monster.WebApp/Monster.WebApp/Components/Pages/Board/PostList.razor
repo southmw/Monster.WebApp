@@ -1,0 +1,186 @@
+@page "/board/{categoryUrl}"
+@using Monster.WebApp.Services
+@using Monster.WebApp.Models
+@inject CategoryService CategoryService
+@inject PostService PostService
+@inject CategoryAccessService CategoryAccessService
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+
+@if (category == null)
+{
+    <div style="display: flex; justify-content: center; padding: 64px 0;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+    </div>
+}
+else if (!hasAccess)
+{
+    <MudPaper Elevation="0" Style="padding: 64px; text-align: center; border: 1px solid rgba(0, 0, 0, 0.08);">
+        <MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Large" Color="Color.Error" Style="margin-bottom: 16px;" />
+        <MudText Typo="Typo.h6" Color="Color.Error">접근 권한이 없습니다</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top: 8px;">
+            이 게시판은 권한이 있는 사용자만 접근할 수 있습니다.
+        </MudText>
+        @if (!AuthService.IsAuthenticated())
+        {
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Href="/account/login"
+                       Style="margin-top: 24px;">
+                로그인하기
+            </MudButton>
+        }
+    </MudPaper>
+}
+else
+{
+    <div class="post-header">
+        <div>
+            <MudText Typo="Typo.h4" Style="font-weight: 700; margin-bottom: 8px;">@category.Name</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary">
+                @category.Description
+            </MudText>
+        </div>
+        @if (canWrite)
+        {
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Create"
+                       Href="@($"/board/{CategoryUrl}/write")"
+                       Style="border-radius: 8px; padding: 10px 24px;">
+                글쓰기
+            </MudButton>
+        }
+    </div>
+
+    @if (posts == null)
+    {
+        <div style="display: flex; justify-content: center; padding: 64px 0;">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </div>
+    }
+    else if (posts.Count == 0)
+    {
+        <MudPaper Elevation="0" Style="padding: 64px; text-align: center; border: 1px solid rgba(0, 0, 0, 0.08);">
+            <MudIcon Icon="@Icons.Material.Outlined.Article" Size="Size.Large" Color="Color.Secondary" Style="margin-bottom: 16px;" />
+            <MudText Typo="Typo.h6" Color="Color.Secondary">작성된 게시글이 없습니다</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top: 8px;">
+                첫 번째 게시글을 작성해보세요!
+            </MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Class="post-list-table">
+            <MudTable Items="@posts" Hover="true" Elevation="0" Class="post-row">
+                <ColGroup>
+                    <col />
+                    <col style="width: 120px;" />
+                    <col style="width: 140px;" />
+                    <col style="width: 80px;" />
+                    <col style="width: 80px;" />
+                </ColGroup>
+                <HeaderContent>
+                    <MudTh Style="font-weight: 600;">제목</MudTh>
+                    <MudTh Style="font-weight: 600;">작성자</MudTh>
+                    <MudTh Style="font-weight: 600;">작성일</MudTh>
+                    <MudTh Style="font-weight: 600; text-align: center;">조회</MudTh>
+                    <MudTh Style="font-weight: 600; text-align: center;">추천</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="제목">
+                        <MudLink Href="@($"/board/{CategoryUrl}/{context.Id}")"
+                                 Style="font-weight: 500; color: #1f2937;">
+                            @context.Title
+                        </MudLink>
+                    </MudTd>
+                    <MudTd DataLabel="작성자">
+                        <MudText Typo="Typo.body2">@context.AuthorNickname</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="작성일">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            @context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")
+                        </MudText>
+                    </MudTd>
+                    <MudTd DataLabel="조회" Style="text-align: center;">
+                        <span class="stat-badge" style="background: rgba(6, 182, 212, 0.1); color: #06b6d4;">
+                            <MudIcon Icon="@Icons.Material.Outlined.Visibility" Size="Size.Small" />
+                            @context.ViewCount
+                        </span>
+                    </MudTd>
+                    <MudTd DataLabel="추천" Style="text-align: center;">
+                        <span class="stat-badge" style="background: rgba(236, 72, 153, 0.1); color: #ec4899;">
+                            <MudIcon Icon="@Icons.Material.Outlined.ThumbUp" Size="Size.Small" />
+                            @context.VoteCount
+                        </span>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+
+        @if (totalCount > 0)
+        {
+            <div style="display: flex; justify-content: center; margin-top: 32px;">
+                <MudPagination Count="@((int)Math.Ceiling(totalCount / (double)pageSize))"
+                               SelectedChanged="OnPageChanged"
+                               Color="Color.Primary"
+                               Variant="Variant.Filled"
+                               Size="Size.Large" />
+            </div>
+        }
+    }
+}
+
+@code {
+    [Parameter]
+    public string CategoryUrl { get; set; } = string.Empty;
+
+    private Category? category;
+    private List<Post>? posts;
+    private int totalCount = 0;
+    private int currentPage = 1;
+    private int pageSize = 20;
+    private bool hasAccess = false;
+    private bool canWrite = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        category = await CategoryService.GetCategoryByUrlSlugAsync(CategoryUrl);
+
+        if (category != null)
+        {
+            // Check access permissions
+            hasAccess = await CategoryAccessService.CanAccessCategoryAsync(category.Id);
+
+            if (!hasAccess)
+            {
+                return;
+            }
+
+            // Check write permissions
+            canWrite = await CategoryAccessService.CanWriteToCategoryAsync(category.Id);
+
+            var result = await PostService.GetPostsByCategoryAsync(category.Id, currentPage, pageSize);
+            posts = result.Posts;
+            totalCount = result.TotalCount;
+        }
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        currentPage = page;
+        await LoadDataAsync();
+    }
+}

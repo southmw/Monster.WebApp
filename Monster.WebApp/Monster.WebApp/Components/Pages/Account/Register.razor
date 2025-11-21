@@ -1,0 +1,144 @@
+@page "/account/register"
+@using Monster.WebApp.Services.Auth
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+    <MudPaper Elevation="3" Class="auth-container">
+        <div class="auth-header">
+            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Large" Color="Color.Primary" />
+            <MudText Typo="Typo.h4" Style="font-weight: 700; margin-top: 16px;">회원가입</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top: 8px;">
+                새 계정을 만드세요
+            </MudText>
+        </div>
+
+        <MudDivider Class="my-4" />
+
+        <MudForm @ref="form" Class="auth-form">
+            <MudTextField @bind-Value="username"
+                          Label="사용자명"
+                          Variant="Variant.Outlined"
+                          Required="true"
+                          Margin="Margin.Dense"
+                          HelperText="영문, 숫자 조합 4-20자"
+                          Class="mb-3" />
+
+            <MudTextField @bind-Value="email"
+                          Label="이메일"
+                          Variant="Variant.Outlined"
+                          Required="true"
+                          InputType="InputType.Email"
+                          Margin="Margin.Dense"
+                          Class="mb-3" />
+
+            <MudTextField @bind-Value="displayName"
+                          Label="닉네임"
+                          Variant="Variant.Outlined"
+                          Required="true"
+                          Margin="Margin.Dense"
+                          HelperText="화면에 표시될 이름"
+                          Class="mb-3" />
+
+            <MudTextField @bind-Value="password"
+                          Label="비밀번호"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Required="true"
+                          Margin="Margin.Dense"
+                          HelperText="최소 6자 이상"
+                          Class="mb-3" />
+
+            <MudTextField @bind-Value="confirmPassword"
+                          Label="비밀번호 확인"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Required="true"
+                          Margin="Margin.Dense"
+                          Class="mb-4" />
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       OnClick="HandleRegister"
+                       Disabled="isLoading"
+                       Class="mb-3">
+                @if (isLoading)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                    <span style="margin-left: 8px;">가입 중...</span>
+                }
+                else
+                {
+                    <span>회원가입</span>
+                }
+            </MudButton>
+
+            <MudText Typo="Typo.body2" Align="Align.Center" Color="Color.Secondary">
+                이미 계정이 있으신가요?
+                <MudLink Href="/account/login" Color="Color.Primary">로그인</MudLink>
+            </MudText>
+        </MudForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private MudForm? form;
+    private string username = string.Empty;
+    private string email = string.Empty;
+    private string displayName = string.Empty;
+    private string password = string.Empty;
+    private string confirmPassword = string.Empty;
+    private bool isLoading = false;
+
+    private async Task HandleRegister()
+    {
+        // Validation
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(email) ||
+            string.IsNullOrWhiteSpace(displayName) || string.IsNullOrWhiteSpace(password))
+        {
+            Snackbar.Add("모든 필드를 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        if (password.Length < 6)
+        {
+            Snackbar.Add("비밀번호는 최소 6자 이상이어야 합니다.", Severity.Warning);
+            return;
+        }
+
+        if (password != confirmPassword)
+        {
+            Snackbar.Add("비밀번호가 일치하지 않습니다.", Severity.Warning);
+            return;
+        }
+
+        isLoading = true;
+
+        try
+        {
+            var user = await AuthService.RegisterAsync(username, email, password, displayName);
+
+            if (user != null)
+            {
+                Snackbar.Add("회원가입이 완료되었습니다! 로그인해주세요.", Severity.Success);
+                NavigationManager.NavigateTo("/account/login");
+            }
+            else
+            {
+                Snackbar.Add("사용자명 또는 이메일이 이미 존재합니다.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"회원가입 중 오류가 발생했습니다: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

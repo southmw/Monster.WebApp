@@ -1,0 +1,120 @@
+@page "/account/login"
+@using Monster.WebApp.Services.Auth
+@using System.Net.Http.Json
+@using Microsoft.JSInterop
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+    <MudPaper Elevation="3" Class="auth-container">
+        <div class="auth-header">
+            <MudIcon Icon="@Icons.Material.Filled.Login" Size="Size.Large" Color="Color.Primary" />
+            <MudText Typo="Typo.h4" Style="font-weight: 700; margin-top: 16px;">로그인</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top: 8px;">
+                계정에 로그인하세요
+            </MudText>
+        </div>
+
+        <MudDivider Class="my-4" />
+
+        <MudForm @ref="form" Class="auth-form">
+            <MudTextField @bind-Value="username"
+                          Label="사용자명"
+                          Variant="Variant.Outlined"
+                          Required="true"
+                          Margin="Margin.Dense"
+                          Class="mb-3" />
+
+            <MudTextField @bind-Value="password"
+                          Label="비밀번호"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Required="true"
+                          Margin="Margin.Dense"
+                          Class="mb-4" />
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       OnClick="HandleLogin"
+                       Disabled="isLoading"
+                       Class="mb-3">
+                @if (isLoading)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                    <span style="margin-left: 8px;">로그인 중...</span>
+                }
+                else
+                {
+                    <span>로그인</span>
+                }
+            </MudButton>
+
+            <MudText Typo="Typo.body2" Align="Align.Center" Color="Color.Secondary">
+                계정이 없으신가요?
+                <MudLink Href="/account/register" Color="Color.Primary">회원가입</MudLink>
+            </MudText>
+        </MudForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private MudForm? form;
+    private string username = string.Empty;
+    private string password = string.Empty;
+    private bool isLoading = false;
+
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    private async Task HandleLogin()
+    {
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+        {
+            Snackbar.Add("사용자명과 비밀번호를 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        isLoading = true;
+
+        try
+        {
+            // Use JavaScript fetch to call the API from the browser
+            var result = await JS.InvokeAsync<LoginResult>("loginUser", username, password);
+
+            if (result.Success)
+            {
+                Snackbar.Add($"환영합니다, {result.DisplayName}님!", Severity.Success);
+
+                // Wait a bit for cookie to be set, then reload
+                await Task.Delay(500);
+
+                // Redirect to return URL or home
+                var redirectUrl = string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl;
+                NavigationManager.NavigateTo(redirectUrl, forceLoad: true);
+            }
+            else
+            {
+                Snackbar.Add(result.Message ?? "사용자명 또는 비밀번호가 올바르지 않습니다.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"로그인 중 오류가 발생했습니다: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private class LoginResult
+    {
+        public bool Success { get; set; }
+        public string? Message { get; set; }
+        public string? DisplayName { get; set; }
+    }
+}
