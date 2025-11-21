@@ -208,4 +208,4 @@ taskkill /PID <PID> /F
 
 ## 연락처
 
-문의사항이 있으시면 admin@southmw.com으로 연락주세요.
+문의사항이 있으시면 southmw@gmail.com으로 연락주세요.
