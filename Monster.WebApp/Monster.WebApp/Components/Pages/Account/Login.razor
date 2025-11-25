@@ -30,9 +30,14 @@
             <MudTextField @bind-Value="password"
                           Label="비밀번호"
                           Variant="Variant.Outlined"
-                          InputType="InputType.Password"
+                          InputType="@(_showPassword ? InputType.Text : InputType.Password)"
                           Required="true"
                           Margin="Margin.Dense"
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                          OnAdornmentClick="TogglePasswordVisibility"
+                          Immediate="true"
+                          @onkeydown="HandleKeyDown"
                           Class="mb-4" />
 
             <MudButton Variant="Variant.Filled"
@@ -66,6 +71,7 @@
     private string username = string.Empty;
     private string password = string.Empty;
     private bool isLoading = false;
+    private bool _showPassword = false;
 
     [SupplyParameterFromQuery]
     public string? ReturnUrl { get; set; }
@@ -108,6 +114,19 @@
         finally
         {
             isLoading = false;
+        }
+    }
+
+    private void TogglePasswordVisibility()
+    {
+        _showPassword = !_showPassword;
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await HandleLogin();
         }
     }
 

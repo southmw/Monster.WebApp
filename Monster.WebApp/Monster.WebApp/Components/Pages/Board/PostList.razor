@@ -55,6 +55,22 @@ else
         }
     </div>
 
+    <!-- 검색 영역 -->
+    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 16px;">
+        @if (!string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small"
+                     OnClose="ClearSearch" Style="margin: 0;">
+                '@_searchQuery' @(totalCount)건
+            </MudChip>
+        }
+        <MudTextField @bind-Value="_searchQuery" Variant="Variant.Outlined"
+                      Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search"
+                      OnAdornmentClick="SearchAsync" Margin="Margin.Dense"
+                      OnKeyUp="@(async (e) => { if (e.Key == "Enter") await SearchAsync(); })"
+                      Placeholder="검색" Clearable="true" Style="max-width: 250px;" />
+    </div>
+
     @if (posts == null)
     {
         <div style="display: flex; justify-content: center; padding: 64px 0;">
@@ -144,6 +160,7 @@ else
     private int pageSize = 20;
     private bool hasAccess = false;
     private bool canWrite = false;
+    private string _searchQuery = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -172,7 +189,7 @@ else
             // Check write permissions
             canWrite = await CategoryAccessService.CanWriteToCategoryAsync(category.Id);
 
-            var result = await PostService.GetPostsByCategoryAsync(category.Id, currentPage, pageSize);
+            var result = await PostService.GetPostsByCategoryAsync(category.Id, currentPage, pageSize, _searchQuery);
             posts = result.Posts;
             totalCount = result.TotalCount;
         }
@@ -181,6 +198,19 @@ else
     private async Task OnPageChanged(int page)
     {
         currentPage = page;
+        await LoadDataAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        currentPage = 1;
+        await LoadDataAsync();
+    }
+
+    private async Task ClearSearch()
+    {
+        _searchQuery = string.Empty;
+        currentPage = 1;
         await LoadDataAsync();
     }
 }

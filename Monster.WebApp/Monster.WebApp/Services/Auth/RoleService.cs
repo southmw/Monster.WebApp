@@ -1,51 +1,54 @@
 using Microsoft.EntityFrameworkCore;
 using Monster.WebApp.Data;
 using Monster.WebApp.Models.Auth;
+using Monster.WebApp.Shared;
+using System.Security.Claims;
 
 namespace Monster.WebApp.Services.Auth;
 
 public class RoleService
 {
-    private readonly ApplicationDbContext _context;
-    private readonly AuthService _authService;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public RoleService(ApplicationDbContext context, AuthService authService)
+    public RoleService(IDbContextFactory<ApplicationDbContext> contextFactory, IHttpContextAccessor httpContextAccessor)
     {
-        _context = context;
-        _authService = authService;
+        _contextFactory = contextFactory;
+        _httpContextAccessor = httpContextAccessor;
     }
 
-    public async Task<List<Role>> GetUserRolesAsync(int userId)
+    public async Task<List<Role>> GetAllRolesAsync()
     {
-        return await _context.UserRoles
-            .Where(ur => ur.UserId == userId)
-            .Include(ur => ur.Role)
-            .Select(ur => ur.Role)
-            .ToListAsync();
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Roles.ToListAsync();
     }
 
     public async Task<bool> AssignRoleAsync(int userId, int roleId)
     {
-        // Check if already assigned
-        if (await _context.UserRoles.AnyAsync(ur => ur.UserId == userId && ur.RoleId == roleId))
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        // Check if assignment already exists
+        if (await context.UserRoles.AnyAsync(ur => ur.UserId == userId && ur.RoleId == roleId))
         {
             return false;
         }
 
-        _context.UserRoles.Add(new UserRole
+        context.UserRoles.Add(new UserRole
         {
             UserId = userId,
             RoleId = roleId,
             AssignedAt = DateTime.UtcNow
         });
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
         return true;
     }
 
     public async Task<bool> RemoveRoleAsync(int userId, int roleId)
     {
-        var userRole = await _context.UserRoles
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var userRole = await context.UserRoles
             .FirstOrDefaultAsync(ur => ur.UserId == userId && ur.RoleId == roleId);
 
         if (userRole == null)
@@ -53,41 +56,65 @@ public class RoleService
             return false;
         }
 
-        _context.UserRoles.Remove(userRole);
-        await _context.SaveChangesAsync();
+        context.UserRoles.Remove(userRole);
+        await context.SaveChangesAsync();
         return true;
     }
 
-    public async Task<bool> HasRoleAsync(int userId, string roleName)
+    public async Task<List<Role>> GetUserRolesAsync(int userId)
     {
-        return await _context.UserRoles
-            .Include(ur => ur.Role)
-            .AnyAsync(ur => ur.UserId == userId && ur.Role.Name == roleName);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.UserRoles
+            .Where(ur => ur.UserId == userId)
+            .Select(ur => ur.Role)
+            .ToListAsync();
     }
 
     public async Task<bool> IsInRoleAsync(string roleName)
     {
-        var userId = _authService.GetCurrentUserId();
-        if (userId == null)
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext?.User?.Identity?.IsAuthenticated != true)
         {
             return false;
         }
 
-        return await HasRoleAsync(userId.Value, roleName);
+        return httpContext.User.IsInRole(roleName);
+    }
+
+    public async Task<bool> HasRoleAsync(int userId, string roleName)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.UserRoles
+            .AnyAsync(ur => ur.UserId == userId && ur.Role.Name == roleName);
     }
 
     public async Task<bool> IsAdminAsync()
     {
-        return await IsInRoleAsync("Admin");
+        return await IsInRoleAsync(AppConstants.Roles.Admin);
     }
 
     public async Task<bool> IsSubAdminOrHigherAsync()
     {
-        return await IsInRoleAsync("Admin") || await IsInRoleAsync("SubAdmin");
+        return await IsInRoleAsync(AppConstants.Roles.Admin) || await IsInRoleAsync(AppConstants.Roles.SubAdmin);
     }
 
-    public async Task<List<Role>> GetAllRolesAsync()
+    public async Task<bool> CanManageUserAsync(int targetUserId)
     {
-        return await _context.Roles.ToListAsync();
+        // Admin can manage everyone
+        if (await IsAdminAsync())
+        {
+            return true;
+        }
+
+        // SubAdmin can manage Users but not other Admins/SubAdmins
+        if (await IsSubAdminOrHigherAsync())
+        {
+            var targetIsAdmin = await HasRoleAsync(targetUserId, AppConstants.Roles.Admin);
+            var targetIsSubAdmin = await HasRoleAsync(targetUserId, AppConstants.Roles.SubAdmin);
+
+            return !targetIsAdmin && !targetIsSubAdmin;
+        }
+
+        return false;
     }
 }

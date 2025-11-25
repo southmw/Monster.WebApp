@@ -65,7 +65,8 @@
 
             <div class="form-section">
                 <MudTextField @bind-Value="content" Label="내용" Variant="Variant.Outlined"
-                              Required="true" Lines="25" FullWidth="true" Class="compact-input" Margin="Margin.Dense" />
+                              Required="true" FullWidth="true" Lines="15"
+                              Placeholder="내용을 입력하세요..." Class="compact-input" Margin="Margin.Dense" />
             </div>
 
             <MudButtonGroup Size="Size.Medium" Style="margin-top: 16px;">
@@ -90,9 +91,9 @@
 
     private Category? category;
     private string title = string.Empty;
+    private string content = string.Empty;
     private string authorNickname = string.Empty;
     private string password = string.Empty;
-    private string content = string.Empty;
     private bool isSubmitting = false;
     private bool canWrite = false;
     private bool isAuthenticated = false;
@@ -125,9 +126,15 @@
 
     private async Task SubmitPost()
     {
-        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(content))
+        if (string.IsNullOrWhiteSpace(title))
         {
-            Snackbar.Add("제목과 내용을 입력해주세요.", Severity.Warning);
+            Snackbar.Add("제목을 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            Snackbar.Add("내용을 입력해주세요.", Severity.Warning);
             return;
         }
 
@@ -147,6 +154,7 @@
         }
 
         isSubmitting = true;
+        StateHasChanged();
 
         try
         {
@@ -158,7 +166,9 @@
                 AuthorNickname = authorNickname
             };
 
-            var createdPost = await PostService.CreatePostAsync(post, password);
+            // 로그인 사용자는 password를 null로 전달
+            var passwordToUse = isAuthenticated ? null : password;
+            var createdPost = await PostService.CreatePostAsync(post, passwordToUse);
 
             Snackbar.Add("게시글이 등록되었습니다.", Severity.Success);
             NavigationManager.NavigateTo($"/board/{CategoryUrl}/{createdPost.Id}");
@@ -167,6 +177,7 @@
         {
             Snackbar.Add($"게시글 등록 중 오류가 발생했습니다: {ex.Message}", Severity.Error);
             isSubmitting = false;
+            StateHasChanged();
         }
     }
 }

@@ -7,12 +7,12 @@ namespace Monster.WebApp.Services.Board;
 
 public class PostService
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly AuthService _authService;
 
-    public PostService(ApplicationDbContext context, AuthService authService)
+    public PostService(IDbContextFactory<ApplicationDbContext> contextFactory, AuthService authService)
     {
-        _context = context;
+        _contextFactory = contextFactory;
         _authService = authService;
     }
 
@@ -22,7 +22,9 @@ public class PostService
         int pageSize = 20,
         string? searchQuery = null)
     {
-        var query = _context.Posts
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var query = context.Posts
             .Include(p => p.Category)
             .Where(p => p.CategoryId == categoryId && !p.IsDeleted);
 
@@ -44,7 +46,8 @@ public class PostService
 
     public async Task<Post?> GetPostByIdAsync(int id)
     {
-        return await _context.Posts
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Posts
             .Include(p => p.Category)
             .Include(p => p.Comments.Where(c => !c.IsDeleted))
             .Include(p => p.Attachments)
@@ -53,6 +56,8 @@ public class PostService
 
     public async Task<Post> CreatePostAsync(Post post, string? password = null)
     {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
         // Set UserId if user is authenticated
         var userId = _authService.GetCurrentUserId();
         if (userId != null)
@@ -72,15 +77,17 @@ public class PostService
 
         post.CreatedAt = DateTime.UtcNow;
 
-        _context.Posts.Add(post);
-        await _context.SaveChangesAsync();
+        context.Posts.Add(post);
+        await context.SaveChangesAsync();
 
         return post;
     }
 
     public async Task<bool> UpdatePostAsync(int id, Post updatedPost, string? password = null)
     {
-        var post = await _context.Posts.FindAsync(id);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var post = await context.Posts.FindAsync(id);
         if (post == null || post.IsDeleted)
             return false;
 
@@ -106,21 +113,31 @@ public class PostService
         post.Content = updatedPost.Content;
         post.UpdatedAt = DateTime.UtcNow;
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
         return true;
     }
 
     public async Task<bool> DeletePostAsync(int id, string? password = null)
     {
-        var post = await _context.Posts.FindAsync(id);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var post = await context.Posts.FindAsync(id);
         if (post == null || post.IsDeleted)
             return false;
+
+        // 관리자는 모든 게시글 삭제 가능
+        if (_authService.IsAdmin())
+        {
+            post.IsDeleted = true;
+            await context.SaveChangesAsync();
+            return true;
+        }
 
         // Check authorization
         var userId = _authService.GetCurrentUserId();
         if (post.UserId != null)
         {
-            // Authenticated post - must be owner or admin
+            // Authenticated post - must be owner
             if (userId != post.UserId)
                 return false;
         }
@@ -135,27 +152,31 @@ public class PostService
         }
 
         post.IsDeleted = true;
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
         return true;
     }
 
     public async Task IncrementViewCountAsync(int id)
     {
-        var post = await _context.Posts.FindAsync(id);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var post = await context.Posts.FindAsync(id);
         if (post != null && !post.IsDeleted)
         {
             post.ViewCount++;
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
         }
     }
 
     public async Task<bool> VotePostAsync(int id)
     {
-        var post = await _context.Posts.FindAsync(id);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var post = await context.Posts.FindAsync(id);
         if (post != null && !post.IsDeleted)
         {
             post.VoteCount++;
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
             return true;
         }
         return false;
@@ -163,6 +184,43 @@ public class PostService
 
     public async Task<int> GetTotalPostCountAsync()
     {
-        return await _context.Posts.CountAsync(p => !p.IsDeleted);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Posts.CountAsync(p => !p.IsDeleted);
+    }
+
+    public async Task<bool> UpdatePostContentAsync(int postId, string content)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var post = await context.Posts.FindAsync(postId);
+        if (post == null || post.IsDeleted)
+            return false;
+
+        post.Content = content;
+        await context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<List<Post>> GetRecentPostsAsync(int count = 5)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Posts
+            .Include(p => p.Category)
+            .Where(p => !p.IsDeleted && p.Category.IsActive)
+            .OrderByDescending(p => p.CreatedAt)
+            .Take(count)
+            .ToListAsync();
+    }
+
+    public async Task<List<Post>> GetPopularPostsAsync(int count = 5)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Posts
+            .Include(p => p.Category)
+            .Where(p => !p.IsDeleted && p.Category.IsActive)
+            .OrderByDescending(p => p.ViewCount)
+            .ThenByDescending(p => p.VoteCount)
+            .Take(count)
+            .ToListAsync();
     }
 }

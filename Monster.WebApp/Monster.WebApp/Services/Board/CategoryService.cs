@@ -6,19 +6,29 @@ namespace Monster.WebApp.Services.Board;
 
 public class CategoryService
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly CategoryAccessService _categoryAccessService;
 
-    public CategoryService(ApplicationDbContext context, CategoryAccessService categoryAccessService)
+    public CategoryService(IDbContextFactory<ApplicationDbContext> contextFactory, CategoryAccessService categoryAccessService)
     {
-        _context = context;
+        _contextFactory = contextFactory;
         _categoryAccessService = categoryAccessService;
     }
 
     public async Task<List<Category>> GetAllActiveCategoriesAsync()
     {
-        return await _context.Categories
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Categories
             .Where(c => c.IsActive)
+            .OrderBy(c => c.DisplayOrder)
+            .ToListAsync();
+    }
+
+    public async Task<List<Category>> GetAllCategoriesAsync()
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Categories
+            .Include(c => c.Posts)
             .OrderBy(c => c.DisplayOrder)
             .ToListAsync();
     }
@@ -30,12 +40,14 @@ public class CategoryService
 
     public async Task<Category?> GetCategoryByIdAsync(int id)
     {
-        return await _context.Categories.FindAsync(id);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Categories.FindAsync(id);
     }
 
     public async Task<Category?> GetCategoryByUrlSlugAsync(string urlSlug)
     {
-        return await _context.Categories
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Categories
             .FirstOrDefaultAsync(c => c.UrlSlug == urlSlug && c.IsActive);
     }
 
@@ -43,6 +55,7 @@ public class CategoryService
     {
         try
         {
+            await using var context = await _contextFactory.CreateDbContextAsync();
             var category = new Category
             {
                 Name = name,
@@ -53,8 +66,8 @@ public class CategoryService
                 CreatedAt = DateTime.UtcNow
             };
 
-            _context.Categories.Add(category);
-            await _context.SaveChangesAsync();
+            context.Categories.Add(category);
+            await context.SaveChangesAsync();
             return true;
         }
         catch
@@ -67,7 +80,8 @@ public class CategoryService
     {
         try
         {
-            var category = await _context.Categories.FindAsync(id);
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            var category = await context.Categories.FindAsync(id);
             if (category == null) return false;
 
             category.Name = name;
@@ -76,7 +90,7 @@ public class CategoryService
             category.DisplayOrder = displayOrder;
             category.IsActive = isActive;
 
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
             return true;
         }
         catch
@@ -89,15 +103,16 @@ public class CategoryService
     {
         try
         {
-            var category = await _context.Categories.FindAsync(id);
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            var category = await context.Categories.FindAsync(id);
             if (category == null) return false;
 
             // Check if there are posts in this category
-            var hasPost = await _context.Posts.AnyAsync(p => p.CategoryId == id && !p.IsDeleted);
+            var hasPost = await context.Posts.AnyAsync(p => p.CategoryId == id && !p.IsDeleted);
             if (hasPost) return false; // Cannot delete category with posts
 
-            _context.Categories.Remove(category);
-            await _context.SaveChangesAsync();
+            context.Categories.Remove(category);
+            await context.SaveChangesAsync();
             return true;
         }
         catch

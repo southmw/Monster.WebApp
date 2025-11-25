@@ -1,118 +1,118 @@
-@using Monster.WebApp.Shared
-@using Monster.WebApp.Services
-@using Monster.WebApp.Models
-@using System.Security.Claims
-@inject AuthService AuthService
-@inject NavigationManager NavigationManager
-@inject IHttpContextAccessor HttpContextAccessor
-@inject IJSRuntime JS
 @inherits LayoutComponentBase
+@using Monster.WebApp.Shared
+@inject IHttpContextAccessor HttpContextAccessor
+@inject IJSRuntime JSRuntime
 
-<MudThemeProvider @bind-IsDarkMode="@_isDarkMode" Theme="@CustomTheme.Theme" />
+<MudThemeProvider @ref="_mudThemeProvider" Theme="_theme" @bind-IsDarkMode="_isDarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
-    <MudAppBar Elevation="0"
-               Class="custom-appbar"
-               dense="true"
-               Style="@GetAppBarStyle()">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu"
-                       Class="appbar-icon"
-                       Edge="Edge.Start"
-                       @onclick="@DrawerToggle" />
-        <MudText Typo="Typo.h5" Class="brand-logo ml-2">Southmw</MudText>
+    <MudAppBar Elevation="0" Style="background-color: var(--mud-palette-appbar-background); color: var(--mud-palette-appbar-text);">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+        <MudText Typo="Typo.h6" Class="ml-3" Style="font-weight: 700;">Southmw</MudText>
         <MudSpacer />
+        
         @if (IsUserAuthenticated())
         {
-            <MudText Typo="Typo.body2" Class="mr-3" Style="color: white;">
+            <MudText Typo="Typo.body2" Class="mr-3" Style="color: var(--mud-palette-appbar-text);">
                 @GetDisplayName() 님
             </MudText>
-            <MudButton Variant="Variant.Text"
-                       Color="Color.Inherit"
-                       StartIcon="@Icons.Material.Filled.Logout"
-                       Href="/api/auth/logout"
-                       Class="mr-2">
-                로그아웃
-            </MudButton>
         }
-        else
-        {
-            <MudButton Variant="Variant.Text"
-                       Color="Color.Inherit"
-                       StartIcon="@Icons.Material.Filled.Login"
-                       Href="/account/login"
-                       Class="mr-2">
-                로그인
-            </MudButton>
-            <MudButton Variant="Variant.Outlined"
-                       Color="Color.Inherit"
-                       StartIcon="@Icons.Material.Filled.PersonAdd"
-                       Href="/account/register">
-                회원가입
-            </MudButton>
-        }
-        <MudIconButton Icon="@Icons.Material.Outlined.Notifications"
-                       Class="appbar-icon ml-3" />
+        
         <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
                        Color="Color.Inherit"
-                       @onclick="@ToggleTheme"
-                       Class="appbar-icon ml-2" />
+                       OnClick="@ToggleDarkMode"
+                       Class="mr-2" />
+        
+        <AuthorizeView>
+            <Authorized>
+                <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" LockScroll="true">
+                    <ActivatorContent>
+                        <MudAvatar Color="Color.Primary" Size="Size.Medium" Class="cursor-pointer">
+                            @context.User.Identity?.Name?.FirstOrDefault()
+                        </MudAvatar>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <MudMenuItem Href="/profile">
+                            <div class="d-flex align-center gap-2">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                                <MudText>내 프로필</MudText>
+                            </div>
+                        </MudMenuItem>
+                        <MudDivider />
+                        <MudMenuItem Href="/api/auth/logout">
+                            <div class="d-flex align-center gap-2">
+                                <MudIcon Icon="@Icons.Material.Filled.Logout" Size="Size.Small" Color="Color.Error" />
+                                <MudText Color="Color.Error">로그아웃</MudText>
+                            </div>
+                        </MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
+            </Authorized>
+            <NotAuthorized>
+                <MudButton Href="/account/login" Variant="Variant.Text" Color="Color.Inherit" Class="mr-2">로그인</MudButton>
+                <MudButton Href="/account/register" Variant="Variant.Filled" Color="Color.Primary" DropShadow="false">회원가입</MudButton>
+            </NotAuthorized>
+        </AuthorizeView>
     </MudAppBar>
-    <MudDrawer @bind-Open="_drawerOpen"
-               Elevation="0"
-               Variant="@DrawerVariant.Responsive"
-               ClipMode="DrawerClipMode.Always"
-               Class="custom-drawer">
-        <MudDrawerHeader Style="padding: 24px;">
-            <MudText Typo="Typo.h6" Class="drawer-brand-logo">Southmw</MudText>
-        </MudDrawerHeader>
+    
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0">
         <NavMenu />
     </MudDrawer>
-    <MudMainContent Class="main-content">
-        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Style="padding: 32px 24px;">
+    
+    <MudMainContent Class="pt-16 px-4">
+        <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-4">
             @Body
         </MudContainer>
     </MudMainContent>
 </MudLayout>
 
+
 @code {
     private bool _drawerOpen = true;
     private bool _isDarkMode = false;
+    private MudThemeProvider _mudThemeProvider = null!;
+    private MudTheme _theme = CustomTheme.Theme;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
+            // localStorage에서 저장된 테마 설정 가져오기 (기본값: 라이트 모드)
             try
             {
-                _isDarkMode = await JS.InvokeAsync<bool>("themeManager.loadTheme");
-                StateHasChanged();
+                var savedTheme = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "theme");
+                _isDarkMode = savedTheme == "dark";
             }
             catch
             {
-                // JavaScript 함수가 아직 로드되지 않은 경우 무시
+                // SSR 또는 JS 사용 불가 시 기본값 라이트 모드
+                _isDarkMode = false;
             }
-        }
-    }
-
-    private async Task ToggleTheme()
-    {
-        _isDarkMode = !_isDarkMode;
-        try
-        {
-            await JS.InvokeVoidAsync("themeManager.saveTheme", _isDarkMode);
-        }
-        catch
-        {
-            // localStorage 저장 실패 시 무시 (테마는 여전히 전환됨)
+            StateHasChanged();
         }
     }
 
     private void DrawerToggle()
     {
         _drawerOpen = !_drawerOpen;
+    }
+
+    private async Task ToggleDarkMode()
+    {
+        _isDarkMode = !_isDarkMode;
+
+        // localStorage에 테마 설정 저장
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "theme", _isDarkMode ? "dark" : "light");
+        }
+        catch
+        {
+            // SSR 또는 JS 사용 불가 시 무시
+        }
     }
 
     private bool IsUserAuthenticated()
@@ -124,17 +124,5 @@
     {
         var displayNameClaim = HttpContextAccessor.HttpContext?.User?.FindFirst("DisplayName");
         return displayNameClaim?.Value ?? "사용자";
-    }
-
-    private string GetAppBarStyle()
-    {
-        if (_isDarkMode)
-        {
-            return "background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%) !important; box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.5), 0 1px 4px 0 rgba(0, 0, 0, 0.3); border-bottom: 1px solid rgba(99, 102, 241, 0.2);";
-        }
-        else
-        {
-            return "background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important; box-shadow: 0 2px 8px 0 rgba(249, 115, 22, 0.3), 0 1px 4px 0 rgba(234, 88, 12, 0.2);";
-        }
     }
 }

@@ -1,10 +1,13 @@
 @page "/board/{categoryUrl}/{postId:int}"
 @using Monster.WebApp.Services
+@using Monster.WebApp.Services.Auth
 @using Monster.WebApp.Models
 @inject CategoryService CategoryService
 @inject PostService PostService
 @inject CommentService CommentService
+@inject AuthService AuthService
 @inject NavigationManager NavigationManager
+@inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @rendermode InteractiveServer
 
@@ -33,7 +36,9 @@
                     @post.VoteCount
                 </MudText>
             </div>
-            <MudText Typo="Typo.body1" Style="white-space: pre-wrap; line-height: 1.8; font-size: 15px;">@post.Content</MudText>
+            <div class="post-html-content" style="line-height: 1.8; font-size: 15px;">
+                @((MarkupString)post.Content)
+            </div>
 
             @if (post.Attachments.Any())
             {
@@ -49,10 +54,19 @@
             }
         </div>
 
-        <MudButtonGroup Variant="Variant.Outlined" Style="margin-bottom: 32px;">
-            <MudButton Color="Color.Success" OnClick="VotePost" StartIcon="@Icons.Material.Outlined.ThumbUp">추천</MudButton>
-            <MudButton Color="Color.Primary" Href="@($"/board/{CategoryUrl}")" StartIcon="@Icons.Material.Outlined.List">목록</MudButton>
-        </MudButtonGroup>
+        <MudStack Row="true" Spacing="2" Style="margin-bottom: 32px;">
+            <MudButtonGroup Variant="Variant.Outlined">
+                <MudButton Color="Color.Success" OnClick="VotePost" StartIcon="@Icons.Material.Outlined.ThumbUp">추천</MudButton>
+                <MudButton Color="Color.Primary" Href="@($"/board/{CategoryUrl}")" StartIcon="@Icons.Material.Outlined.List">목록</MudButton>
+            </MudButtonGroup>
+            @if (CanEditOrDelete())
+            {
+                <MudButtonGroup Variant="Variant.Outlined">
+                    <MudButton Color="Color.Info" OnClick="EditPost" StartIcon="@Icons.Material.Outlined.Edit">수정</MudButton>
+                    <MudButton Color="Color.Error" OnClick="DeletePost" StartIcon="@Icons.Material.Outlined.Delete">삭제</MudButton>
+                </MudButtonGroup>
+            }
+        </MudStack>
 
         <!-- 댓글 섹션 -->
         <div class="comment-section">
@@ -64,16 +78,19 @@
             <div class="comment-form">
                 <MudText Typo="Typo.subtitle1" Style="font-weight: 600; margin-bottom: 12px;">댓글 작성</MudText>
                 <MudGrid Spacing="1">
-                    <MudItem xs="6" sm="6">
-                        <MudTextField @bind-Value="commentNickname" Label="작성자" Variant="Variant.Outlined"
-                                      MaxLength="50" FullWidth="true"
-                                      Class="compact-input" Margin="Margin.Dense" />
-                    </MudItem>
-                    <MudItem xs="6" sm="4">
-                        <MudTextField @bind-Value="commentPassword" Label="비밀번호" Variant="Variant.Outlined"
-                                      InputType="InputType.Password" FullWidth="true"
-                                      Class="compact-input" Margin="Margin.Dense" />
-                    </MudItem>
+                    @if (!IsLoggedIn)
+                    {
+                        <MudItem xs="6" sm="6">
+                            <MudTextField @bind-Value="commentNickname" Label="작성자" Variant="Variant.Outlined"
+                                          MaxLength="50" FullWidth="true"
+                                          Class="compact-input" Margin="Margin.Dense" />
+                        </MudItem>
+                        <MudItem xs="6" sm="4">
+                            <MudTextField @bind-Value="commentPassword" Label="비밀번호" Variant="Variant.Outlined"
+                                          InputType="InputType.Password" FullWidth="true"
+                                          Class="compact-input" Margin="Margin.Dense" />
+                        </MudItem>
+                    }
                     <MudItem xs="12">
                         <MudTextField @bind-Value="commentContent" Label="댓글 내용" Variant="Variant.Outlined"
                                       Lines="3" Class="compact-input" Margin="Margin.Dense" />
@@ -91,13 +108,43 @@
             @foreach (var comment in post.Comments.Where(c => c.ParentCommentId == null))
             {
                 <div class="comment-item">
-                    <MudText Typo="Typo.body2" Style="font-weight: 600; color: #374151;">
-                        @comment.AuthorNickname
-                        <span style="font-weight: 400; color: #9ca3af; margin-left: 8px;">
-                            @comment.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
-                        </span>
-                    </MudText>
-                    <MudText Typo="Typo.body1" Style="margin-top: 12px; line-height: 1.6;">@comment.Content</MudText>
+                    <div class="d-flex justify-space-between align-center">
+                        <MudText Typo="Typo.body2" Style="font-weight: 600;">
+                            @comment.AuthorNickname
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="font-weight: 400; margin-left: 8px;" Class="d-inline">
+                                @comment.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                            </MudText>
+                        </MudText>
+                        @if (editingCommentId != comment.Id)
+                        {
+                            <MudStack Row="true" Spacing="0">
+                                <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
+                                               Color="Color.Default" OnClick="@(() => StartEditComment(comment))" />
+                                <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
+                                               Color="Color.Error" OnClick="@(() => DeleteComment(comment))" />
+                            </MudStack>
+                        }
+                    </div>
+
+                    @if (editingCommentId == comment.Id)
+                    {
+                        <div style="margin-top: 12px;">
+                            <MudTextField @bind-Value="editCommentContent" Label="댓글 수정" Variant="Variant.Outlined"
+                                          Lines="3" Class="compact-input" Margin="Margin.Dense" />
+                            <MudStack Row="true" Spacing="1" Class="mt-2">
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                           OnClick="SaveEditComment">저장</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary"
+                                           OnClick="CancelEditComment">취소</MudButton>
+                            </MudStack>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="comment-html-content" style="margin-top: 12px; line-height: 1.6;">
+                            @((MarkupString)comment.Content)
+                        </div>
+                    }
 
                     <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
                                OnClick="() => ShowReplyForm(comment.Id)" Style="margin-top: 8px;"
@@ -107,19 +154,21 @@
 
                     @if (replyToCommentId == comment.Id)
                     {
-                        <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; margin-top: 12px;">
-                            <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">답글 작성</MudText>
+                        <div style="margin-left: 32px; margin-top: 12px; padding-left: 12px; border-left: 2px solid var(--mud-palette-lines-default);">
                             <MudGrid Spacing="1">
-                                <MudItem xs="6" sm="3">
-                                    <MudTextField @bind-Value="replyNickname" Label="작성자" Variant="Variant.Outlined"
-                                                  MaxLength="50" FullWidth="true"
-                                                  Class="compact-input" Margin="Margin.Dense" />
-                                </MudItem>
-                                <MudItem xs="6" sm="3">
-                                    <MudTextField @bind-Value="replyPassword" Label="비밀번호" Variant="Variant.Outlined"
-                                                  InputType="InputType.Password" FullWidth="true"
-                                                  Class="compact-input" Margin="Margin.Dense" />
-                                </MudItem>
+                                @if (!IsLoggedIn)
+                                {
+                                    <MudItem xs="6" sm="3">
+                                        <MudTextField @bind-Value="replyNickname" Label="작성자" Variant="Variant.Outlined"
+                                                      MaxLength="50" FullWidth="true"
+                                                      Class="compact-input" Margin="Margin.Dense" />
+                                    </MudItem>
+                                    <MudItem xs="6" sm="3">
+                                        <MudTextField @bind-Value="replyPassword" Label="비밀번호" Variant="Variant.Outlined"
+                                                      InputType="InputType.Password" FullWidth="true"
+                                                      Class="compact-input" Margin="Margin.Dense" />
+                                    </MudItem>
+                                }
                                 <MudItem xs="12">
                                     <MudTextField @bind-Value="replyContent" Label="답글 내용" Variant="Variant.Outlined"
                                                   Lines="2" Class="compact-input" Margin="Margin.Dense" />
@@ -142,15 +191,45 @@
 
                     @foreach (var reply in post.Comments.Where(c => c.ParentCommentId == comment.Id))
                     {
-                        <div class="reply-item">
-                            <MudText Typo="Typo.body2" Style="font-weight: 600; color: #374151;">
-                                <MudIcon Icon="@Icons.Material.Outlined.SubdirectoryArrowRight" Size="Size.Small" Style="vertical-align: middle;" />
-                                @reply.AuthorNickname
-                                <span style="font-weight: 400; color: #9ca3af; margin-left: 8px;">
-                                    @reply.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
-                                </span>
-                            </MudText>
-                            <MudText Typo="Typo.body2" Style="margin-top: 8px; line-height: 1.6;">@reply.Content</MudText>
+                        <div style="margin-left: 32px; margin-top: 12px; padding-left: 12px; border-left: 2px solid var(--mud-palette-lines-default);">
+                            <div class="d-flex justify-space-between align-center">
+                                <MudText Typo="Typo.body2" Style="font-weight: 600;">
+                                    <MudIcon Icon="@Icons.Material.Outlined.SubdirectoryArrowRight" Size="Size.Small" Color="Color.Secondary" Style="vertical-align: middle;" />
+                                    @reply.AuthorNickname
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Style="font-weight: 400; margin-left: 8px;" Class="d-inline">
+                                        @reply.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                                    </MudText>
+                                </MudText>
+                                @if (editingCommentId != reply.Id)
+                                {
+                                    <MudStack Row="true" Spacing="0">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
+                                                       Color="Color.Default" OnClick="@(() => StartEditComment(reply))" />
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
+                                                       Color="Color.Error" OnClick="@(() => DeleteComment(reply))" />
+                                    </MudStack>
+                                }
+                            </div>
+
+                            @if (editingCommentId == reply.Id)
+                            {
+                                <div style="margin-top: 8px;">
+                                    <MudTextField @bind-Value="editCommentContent" Label="답글 수정" Variant="Variant.Outlined"
+                                                  Lines="2" Class="compact-input" Margin="Margin.Dense" />
+                                    <MudStack Row="true" Spacing="1" Class="mt-2">
+                                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                                   OnClick="SaveEditComment">저장</MudButton>
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary"
+                                                   OnClick="CancelEditComment">취소</MudButton>
+                                    </MudStack>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="comment-html-content" style="margin-top: 8px; line-height: 1.6; font-size: 14px;">
+                                    @((MarkupString)reply.Content)
+                                </div>
+                            }
                         </div>
                     }
                 </div>
@@ -167,6 +246,9 @@
     public int PostId { get; set; }
 
     private Post? post;
+    private int? _currentUserId;
+    private bool _isAdmin = false;
+    private bool IsLoggedIn => _currentUserId != null;
 
     // Comment fields
     private string commentNickname = string.Empty;
@@ -181,9 +263,108 @@
     private string replyContent = string.Empty;
     private bool isSubmittingReply = false;
 
+    // Edit comment fields
+    private int? editingCommentId = null;
+    private string editCommentContent = string.Empty;
+    private string? editCommentPassword = null;
+
     protected override async Task OnInitializedAsync()
     {
+        _currentUserId = AuthService.GetCurrentUserId();
+        _isAdmin = AuthService.IsAdmin();
         await LoadPostAsync();
+    }
+
+    private bool CanEditOrDelete()
+    {
+        if (post == null) return false;
+
+        // 관리자는 모든 게시글 수정/삭제 가능
+        if (_isAdmin) return true;
+
+        // 익명 게시글은 항상 수정/삭제 버튼 표시 (비밀번호로 확인)
+        if (post.UserId == null) return true;
+
+        // 로그인한 사용자의 본인 게시글
+        if (_currentUserId != null && post.UserId == _currentUserId) return true;
+
+        return false;
+    }
+
+    private async Task EditPost()
+    {
+        if (post == null) return;
+
+        // 익명 게시글인 경우 비밀번호 확인
+        if (post.UserId == null)
+        {
+            var password = await ShowPasswordDialog("게시글 수정", "게시글 작성 시 입력한 비밀번호를 입력해주세요.");
+            if (string.IsNullOrEmpty(password)) return;
+
+            // 비밀번호 검증 후 수정 페이지로 이동 (URL에 password 포함하지 않음, 세션 또는 다른 방식 필요)
+            NavigationManager.NavigateTo($"/board/{CategoryUrl}/{PostId}/edit?verify={Uri.EscapeDataString(password)}");
+        }
+        else
+        {
+            // 로그인 사용자 게시글
+            NavigationManager.NavigateTo($"/board/{CategoryUrl}/{PostId}/edit");
+        }
+    }
+
+    private async Task DeletePost()
+    {
+        if (post == null) return;
+
+        string? password = null;
+
+        // 관리자가 아니고 익명 게시글인 경우 비밀번호 확인
+        if (!_isAdmin && post.UserId == null)
+        {
+            password = await ShowPasswordDialog("게시글 삭제", "게시글 작성 시 입력한 비밀번호를 입력해주세요.");
+            if (string.IsNullOrEmpty(password)) return;
+        }
+
+        // 삭제 확인 다이얼로그
+        var confirmed = await DialogService.ShowMessageBox(
+            "게시글 삭제",
+            "정말로 이 게시글을 삭제하시겠습니까?",
+            yesText: "삭제",
+            cancelText: "취소"
+        );
+
+        if (confirmed == true)
+        {
+            var success = await PostService.DeletePostAsync(PostId, password);
+            if (success)
+            {
+                Snackbar.Add("게시글이 삭제되었습니다.", Severity.Success);
+                NavigationManager.NavigateTo($"/board/{CategoryUrl}");
+            }
+            else
+            {
+                Snackbar.Add("게시글 삭제에 실패했습니다. 비밀번호를 확인해주세요.", Severity.Error);
+            }
+        }
+    }
+
+    private async Task<string?> ShowPasswordDialog(string title, string message)
+    {
+        var parameters = new DialogParameters<PasswordDialog>
+        {
+            { x => x.Title, title },
+            { x => x.Message, message }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<PasswordDialog>(title, parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data is string password)
+        {
+            return password;
+        }
+
+        return null;
     }
 
     private async Task LoadPostAsync()
@@ -206,11 +387,16 @@
 
     private async Task SubmitComment()
     {
-        if (string.IsNullOrWhiteSpace(commentNickname) ||
-            string.IsNullOrWhiteSpace(commentPassword) ||
-            string.IsNullOrWhiteSpace(commentContent))
+        if (string.IsNullOrWhiteSpace(commentContent))
         {
-            Snackbar.Add("모든 필드를 입력해주세요.", Severity.Warning);
+            Snackbar.Add("댓글 내용을 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        // 비로그인 사용자는 닉네임/비밀번호 필수
+        if (!IsLoggedIn && (string.IsNullOrWhiteSpace(commentNickname) || string.IsNullOrWhiteSpace(commentPassword)))
+        {
+            Snackbar.Add("작성자와 비밀번호를 입력해주세요.", Severity.Warning);
             return;
         }
 
@@ -222,10 +408,11 @@
             {
                 PostId = PostId,
                 Content = commentContent,
-                AuthorNickname = commentNickname
+                UserId = _currentUserId,
+                AuthorNickname = IsLoggedIn ? AuthService.GetCurrentUserDisplayName() ?? "사용자" : commentNickname
             };
 
-            await CommentService.CreateCommentAsync(comment, commentPassword);
+            await CommentService.CreateCommentAsync(comment, IsLoggedIn ? null : commentPassword);
 
             // Clear form
             commentNickname = string.Empty;
@@ -263,11 +450,16 @@
 
     private async Task SubmitReply()
     {
-        if (string.IsNullOrWhiteSpace(replyNickname) ||
-            string.IsNullOrWhiteSpace(replyPassword) ||
-            string.IsNullOrWhiteSpace(replyContent))
+        if (string.IsNullOrWhiteSpace(replyContent))
         {
-            Snackbar.Add("모든 필드를 입력해주세요.", Severity.Warning);
+            Snackbar.Add("답글 내용을 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        // 비로그인 사용자는 닉네임/비밀번호 필수
+        if (!IsLoggedIn && (string.IsNullOrWhiteSpace(replyNickname) || string.IsNullOrWhiteSpace(replyPassword)))
+        {
+            Snackbar.Add("작성자와 비밀번호를 입력해주세요.", Severity.Warning);
             return;
         }
 
@@ -285,10 +477,11 @@
                 PostId = PostId,
                 ParentCommentId = replyToCommentId,
                 Content = replyContent,
-                AuthorNickname = replyNickname
+                UserId = _currentUserId,
+                AuthorNickname = IsLoggedIn ? AuthService.GetCurrentUserDisplayName() ?? "사용자" : replyNickname
             };
 
-            await CommentService.CreateCommentAsync(reply, replyPassword);
+            await CommentService.CreateCommentAsync(reply, IsLoggedIn ? null : replyPassword);
 
             CancelReply();
 
@@ -302,6 +495,110 @@
         finally
         {
             isSubmittingReply = false;
+        }
+    }
+
+    private async Task StartEditComment(Comment comment)
+    {
+        // 익명 댓글인 경우 비밀번호 확인
+        if (comment.UserId == null)
+        {
+            var password = await ShowPasswordDialog("댓글 수정", "댓글 작성 시 입력한 비밀번호를 입력해주세요.");
+            if (string.IsNullOrEmpty(password)) return;
+
+            // 비밀번호 검증
+            if (comment.AuthorPassword != null && BCrypt.Net.BCrypt.Verify(password, comment.AuthorPassword))
+            {
+                editCommentPassword = password;
+                editingCommentId = comment.Id;
+                editCommentContent = comment.Content;
+            }
+            else
+            {
+                Snackbar.Add("비밀번호가 일치하지 않습니다.", Severity.Error);
+            }
+        }
+        else if (_currentUserId != null && comment.UserId == _currentUserId)
+        {
+            // 본인 댓글
+            editingCommentId = comment.Id;
+            editCommentContent = comment.Content;
+            editCommentPassword = null;
+        }
+        else
+        {
+            Snackbar.Add("수정 권한이 없습니다.", Severity.Error);
+        }
+    }
+
+    private void CancelEditComment()
+    {
+        editingCommentId = null;
+        editCommentContent = string.Empty;
+        editCommentPassword = null;
+    }
+
+    private async Task SaveEditComment()
+    {
+        if (editingCommentId == null || string.IsNullOrWhiteSpace(editCommentContent))
+        {
+            Snackbar.Add("댓글 내용을 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        var success = await CommentService.UpdateCommentAsync(editingCommentId.Value, editCommentContent, editCommentPassword);
+
+        if (success)
+        {
+            Snackbar.Add("댓글이 수정되었습니다.", Severity.Success);
+            NavigationManager.NavigateTo($"/board/{CategoryUrl}/{PostId}", forceLoad: true);
+        }
+        else
+        {
+            Snackbar.Add("댓글 수정에 실패했습니다.", Severity.Error);
+        }
+    }
+
+    private async Task DeleteComment(Comment comment)
+    {
+        string? password = null;
+
+        // 관리자가 아닌 경우에만 권한 체크
+        if (!_isAdmin)
+        {
+            // 익명 댓글인 경우 비밀번호 확인
+            if (comment.UserId == null)
+            {
+                password = await ShowPasswordDialog("댓글 삭제", "댓글 작성 시 입력한 비밀번호를 입력해주세요.");
+                if (string.IsNullOrEmpty(password)) return;
+            }
+            else if (_currentUserId == null || comment.UserId != _currentUserId)
+            {
+                Snackbar.Add("삭제 권한이 없습니다.", Severity.Error);
+                return;
+            }
+        }
+
+        // 삭제 확인 다이얼로그
+        var confirmed = await DialogService.ShowMessageBox(
+            "댓글 삭제",
+            "정말로 이 댓글을 삭제하시겠습니까?",
+            yesText: "삭제",
+            cancelText: "취소"
+        );
+
+        if (confirmed == true)
+        {
+            var success = await CommentService.DeleteCommentAsync(comment.Id, password);
+            if (success)
+            {
+                Snackbar.Add("댓글이 삭제되었습니다.", Severity.Success);
+                NavigationManager.NavigateTo($"/board/{CategoryUrl}/{PostId}", forceLoad: true);
+            }
+            else
+            {
+                Snackbar.Add("댓글 삭제에 실패했습니다. 비밀번호를 확인해주세요.", Severity.Error);
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Monster.WebApp.Models.Auth;
 using Monster.WebApp.Models.Board;
+using Monster.WebApp.Shared;
 
 namespace Monster.WebApp.Data;
 
@@ -141,21 +142,21 @@ public class ApplicationDbContext : DbContext
             new Role
             {
                 Id = 1,
-                Name = "Admin",
+                Name = AppConstants.Roles.Admin,
                 Description = "전체 관리자 - 모든 권한",
                 CreatedAt = seedDate
             },
             new Role
             {
                 Id = 2,
-                Name = "SubAdmin",
+                Name = AppConstants.Roles.SubAdmin,
                 Description = "서브 관리자 - 제한된 관리 권한",
                 CreatedAt = seedDate
             },
             new Role
             {
                 Id = 3,
-                Name = "User",
+                Name = AppConstants.Roles.User,
                 Description = "일반 사용자",
                 CreatedAt = seedDate
             }

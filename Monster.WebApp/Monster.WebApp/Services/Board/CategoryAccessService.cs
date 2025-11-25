@@ -2,25 +2,28 @@ using Microsoft.EntityFrameworkCore;
 using Monster.WebApp.Data;
 using Monster.WebApp.Models.Board;
 using Monster.WebApp.Services.Auth;
+using Monster.WebApp.Shared;
 
 namespace Monster.WebApp.Services.Board;
 
 public class CategoryAccessService
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly AuthService _authService;
     private readonly RoleService _roleService;
 
-    public CategoryAccessService(ApplicationDbContext context, AuthService authService, RoleService roleService)
+    public CategoryAccessService(IDbContextFactory<ApplicationDbContext> contextFactory, AuthService authService, RoleService roleService)
     {
-        _context = context;
+        _contextFactory = contextFactory;
         _authService = authService;
         _roleService = roleService;
     }
 
     public async Task<bool> CanAccessCategoryAsync(int categoryId, int? userId = null)
     {
-        var category = await _context.Categories.FindAsync(categoryId);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var category = await context.Categories.FindAsync(categoryId);
         if (category == null || !category.IsActive)
         {
             return false;
@@ -42,7 +45,7 @@ public class CategoryAccessService
         }
 
         // Admins can access all boards
-        if (userId != null && await _roleService.HasRoleAsync(userId.Value, "Admin"))
+        if (userId != null && await _roleService.HasRoleAsync(userId.Value, AppConstants.Roles.Admin))
         {
             return true;
         }
@@ -57,7 +60,7 @@ public class CategoryAccessService
         if (userId != null)
         {
             // Check user-specific access
-            var hasUserAccess = await _context.CategoryAccesses
+            var hasUserAccess = await context.CategoryAccesses
                 .AnyAsync(ca => ca.CategoryId == categoryId && ca.UserId == userId);
 
             if (hasUserAccess)
@@ -66,12 +69,12 @@ public class CategoryAccessService
             }
 
             // Check role-based access
-            var userRoleIds = await _context.UserRoles
+            var userRoleIds = await context.UserRoles
                 .Where(ur => ur.UserId == userId.Value)
                 .Select(ur => ur.RoleId)
                 .ToListAsync();
 
-            var hasRoleAccess = await _context.CategoryAccesses
+            var hasRoleAccess = await context.CategoryAccesses
                 .AnyAsync(ca => ca.CategoryId == categoryId && ca.RoleId != null && userRoleIds.Contains(ca.RoleId.Value));
 
             if (hasRoleAccess)
@@ -94,12 +97,14 @@ public class CategoryAccessService
         userId ??= _authService.GetCurrentUserId();
 
         // Admins can write to all boards
-        if (userId != null && await _roleService.HasRoleAsync(userId.Value, "Admin"))
+        if (userId != null && await _roleService.HasRoleAsync(userId.Value, AppConstants.Roles.Admin))
         {
             return true;
         }
 
-        var category = await _context.Categories.FindAsync(categoryId);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var category = await context.Categories.FindAsync(categoryId);
         if (category == null)
         {
             return false;
@@ -114,9 +119,9 @@ public class CategoryAccessService
         // Check write permissions
         if (userId != null)
         {
-            var hasWriteAccess = await _context.CategoryAccesses
+            var hasWriteAccess = await context.CategoryAccesses
                 .AnyAsync(ca => ca.CategoryId == categoryId &&
-                               (ca.UserId == userId || (ca.RoleId != null && _context.UserRoles.Any(ur => ur.UserId == userId && ur.RoleId == ca.RoleId))) &&
+                               (ca.UserId == userId || (ca.RoleId != null && context.UserRoles.Any(ur => ur.UserId == userId && ur.RoleId == ca.RoleId))) &&
                                (ca.AccessType == AccessType.Write || ca.AccessType == AccessType.Manage));
 
             return hasWriteAccess;
@@ -130,7 +135,7 @@ public class CategoryAccessService
         userId ??= _authService.GetCurrentUserId();
 
         // Admins can manage all boards
-        if (userId != null && await _roleService.HasRoleAsync(userId.Value, "Admin"))
+        if (userId != null && await _roleService.HasRoleAsync(userId.Value, AppConstants.Roles.Admin))
         {
             return true;
         }
@@ -138,9 +143,11 @@ public class CategoryAccessService
         // Check manage permissions
         if (userId != null)
         {
-            var hasManageAccess = await _context.CategoryAccesses
+            await using var context = await _contextFactory.CreateDbContextAsync();
+
+            var hasManageAccess = await context.CategoryAccesses
                 .AnyAsync(ca => ca.CategoryId == categoryId &&
-                               (ca.UserId == userId || (ca.RoleId != null && _context.UserRoles.Any(ur => ur.UserId == userId && ur.RoleId == ca.RoleId))) &&
+                               (ca.UserId == userId || (ca.RoleId != null && context.UserRoles.Any(ur => ur.UserId == userId && ur.RoleId == ca.RoleId))) &&
                                ca.AccessType == AccessType.Manage);
 
             return hasManageAccess;
@@ -156,8 +163,10 @@ public class CategoryAccessService
             return false;
         }
 
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
         // Check if access already exists
-        var existingAccess = await _context.CategoryAccesses
+        var existingAccess = await context.CategoryAccesses
             .FirstOrDefaultAsync(ca => ca.CategoryId == categoryId &&
                                       ca.UserId == userId &&
                                       ca.RoleId == roleId);
@@ -170,7 +179,7 @@ public class CategoryAccessService
         else
         {
             // Create new access
-            _context.CategoryAccesses.Add(new CategoryAccess
+            context.CategoryAccesses.Add(new CategoryAccess
             {
                 CategoryId = categoryId,
                 UserId = userId,
@@ -180,13 +189,15 @@ public class CategoryAccessService
             });
         }
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
         return true;
     }
 
     public async Task<bool> RevokeAccessAsync(int categoryId, int? userId = null, int? roleId = null)
     {
-        var access = await _context.CategoryAccesses
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var access = await context.CategoryAccesses
             .FirstOrDefaultAsync(ca => ca.CategoryId == categoryId &&
                                       ca.UserId == userId &&
                                       ca.RoleId == roleId);
@@ -196,8 +207,8 @@ public class CategoryAccessService
             return false;
         }
 
-        _context.CategoryAccesses.Remove(access);
-        await _context.SaveChangesAsync();
+        context.CategoryAccesses.Remove(access);
+        await context.SaveChangesAsync();
         return true;
     }
 
@@ -205,8 +216,10 @@ public class CategoryAccessService
     {
         userId ??= _authService.GetCurrentUserId();
 
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
         // Get all active categories
-        var allCategories = await _context.Categories
+        var allCategories = await context.Categories
             .Where(c => c.IsActive)
             .OrderBy(c => c.DisplayOrder)
             .ToListAsync();

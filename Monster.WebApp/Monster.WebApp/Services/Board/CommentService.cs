@@ -7,18 +7,19 @@ namespace Monster.WebApp.Services.Board;
 
 public class CommentService
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly AuthService _authService;
 
-    public CommentService(ApplicationDbContext context, AuthService authService)
+    public CommentService(IDbContextFactory<ApplicationDbContext> contextFactory, AuthService authService)
     {
-        _context = context;
+        _contextFactory = contextFactory;
         _authService = authService;
     }
 
     public async Task<List<Comment>> GetCommentsByPostIdAsync(int postId)
     {
-        return await _context.Comments
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Comments
             .Where(c => c.PostId == postId && !c.IsDeleted)
             .OrderBy(c => c.CreatedAt)
             .ToListAsync();
@@ -26,6 +27,8 @@ public class CommentService
 
     public async Task<Comment> CreateCommentAsync(Comment comment, string? password = null)
     {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
         // Set UserId if user is authenticated
         var userId = _authService.GetCurrentUserId();
         if (userId != null)
@@ -45,15 +48,17 @@ public class CommentService
 
         comment.CreatedAt = DateTime.UtcNow;
 
-        _context.Comments.Add(comment);
-        await _context.SaveChangesAsync();
+        context.Comments.Add(comment);
+        await context.SaveChangesAsync();
 
         return comment;
     }
 
     public async Task<bool> UpdateCommentAsync(int id, string content, string? password = null)
     {
-        var comment = await _context.Comments.FindAsync(id);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var comment = await context.Comments.FindAsync(id);
         if (comment == null || comment.IsDeleted)
             return false;
 
@@ -78,21 +83,31 @@ public class CommentService
         comment.Content = content;
         comment.UpdatedAt = DateTime.UtcNow;
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
         return true;
     }
 
     public async Task<bool> DeleteCommentAsync(int id, string? password = null)
     {
-        var comment = await _context.Comments.FindAsync(id);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var comment = await context.Comments.FindAsync(id);
         if (comment == null || comment.IsDeleted)
             return false;
+
+        // 관리자는 모든 댓글 삭제 가능
+        if (_authService.IsAdmin())
+        {
+            comment.IsDeleted = true;
+            await context.SaveChangesAsync();
+            return true;
+        }
 
         // Check authorization
         var userId = _authService.GetCurrentUserId();
         if (comment.UserId != null)
         {
-            // Authenticated comment - must be owner or admin
+            // Authenticated comment - must be owner
             if (userId != comment.UserId)
                 return false;
         }
@@ -107,7 +122,7 @@ public class CommentService
         }
 
         comment.IsDeleted = true;
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
         return true;
     }
 }

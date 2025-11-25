@@ -1,0 +1,374 @@
+@page "/admin/settings"
+@using Monster.WebApp.Services.Auth
+@using Monster.WebApp.Services.Board
+@using Monster.WebApp.Models.Auth
+@using Monster.WebApp.Models.Board
+@using Monster.WebApp.Components.Pages.Admin.Users
+@using Monster.WebApp.Components.Pages.Admin.Categories
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = "AdminOnly")]
+@inject UserService UserService
+@inject RoleService RoleService
+@inject CategoryService CategoryService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+
+<PageTitle>설정</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-6" Style="font-weight: 600;">설정</MudText>
+
+    <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+        <MudTabPanel Text="사용자 관리" Icon="@Icons.Material.Filled.People">
+            @if (_isLoadingUsers)
+            {
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            }
+            else
+            {
+                <!-- Search and Filter -->
+                <MudGrid Spacing="2" Class="mb-4">
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_searchQuery"
+                                     Label="검색"
+                                     Variant="Variant.Outlined"
+                                     Adornment="Adornment.End"
+                                     AdornmentIcon="@Icons.Material.Filled.Search"
+                                     OnAdornmentClick="SearchUsersAsync"
+                                     OnKeyUp="@(async (e) => { if (e.Key == "Enter") await SearchUsersAsync(); })"
+                                     Placeholder="사용자명, 이메일, 표시명" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6" Style="display: flex; align-items: center; justify-content: flex-end;">
+                        <MudButton Variant="Variant.Filled"
+                                  Color="Color.Primary"
+                                  StartIcon="@Icons.Material.Filled.Refresh"
+                                  OnClick="LoadUsersAsync">
+                            새로고침
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+
+                <!-- Users Table -->
+                <MudTable Items="@_users" Hover="true" Dense="true" Class="mt-4">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>사용자명</MudTh>
+                        <MudTh>이메일</MudTh>
+                        <MudTh>표시명</MudTh>
+                        <MudTh>역할</MudTh>
+                        <MudTh>가입일</MudTh>
+                        <MudTh>상태</MudTh>
+                        <MudTh>작업</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="ID">@context.Id</MudTd>
+                        <MudTd DataLabel="사용자명">@context.Username</MudTd>
+                        <MudTd DataLabel="이메일">@context.Email</MudTd>
+                        <MudTd DataLabel="표시명">@context.DisplayName</MudTd>
+                        <MudTd DataLabel="역할">
+                            @if (context.UserRoles.Any())
+                            {
+                                @foreach (var userRole in context.UserRoles)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="mr-1">
+                                        @userRole.Role.DisplayName
+                                    </MudChip>
+                                }
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">역할 없음</MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="가입일">@context.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudTd>
+                        <MudTd DataLabel="상태">
+                            <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">
+                                @(context.IsActive ? "활성" : "비활성")
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="작업">
+                            <MudStack Row="true" Spacing="1">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                             Color="Color.Info"
+                                             Size="Size.Small"
+                                             OnClick="@(() => EditUserAsync(context))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Security"
+                                             Color="Color.Secondary"
+                                             Size="Size.Small"
+                                             OnClick="@(() => ManageRolesAsync(context))" />
+                                <MudIconButton Icon="@(context.IsActive ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
+                                             Color="@(context.IsActive ? Color.Warning : Color.Success)"
+                                             Size="Size.Small"
+                                             OnClick="@(() => ToggleUserStatusAsync(context))" />
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                    <PagerContent>
+                        <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }" />
+                    </PagerContent>
+                </MudTable>
+
+                <!-- Statistics -->
+                <MudText Typo="Typo.caption" Class="mt-4" Color="Color.Secondary">
+                    전체 사용자: @(_totalUserCount)명 | 현재 페이지: @(_users.Count)명
+                </MudText>
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="카테고리 관리" Icon="@Icons.Material.Filled.Category">
+            @if (_isLoadingCategories)
+            {
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            }
+            else
+            {
+                <!-- Action Buttons -->
+                <MudStack Row="true" Spacing="2" Class="mb-4" Justify="Justify.FlexEnd">
+                    <MudButton Variant="Variant.Filled"
+                              Color="Color.Primary"
+                              StartIcon="@Icons.Material.Filled.Add"
+                              OnClick="CreateCategoryAsync">
+                        새 카테고리
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                              Color="Color.Secondary"
+                              StartIcon="@Icons.Material.Filled.Refresh"
+                              OnClick="LoadCategoriesAsync">
+                        새로고침
+                    </MudButton>
+                </MudStack>
+
+                <!-- Categories Table -->
+                <MudTable Items="@_categories" Hover="true" Dense="true" Class="mt-4">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>이름</MudTh>
+                        <MudTh>URL Slug</MudTh>
+                        <MudTh>설명</MudTh>
+                        <MudTh>순서</MudTh>
+                        <MudTh>게시글 수</MudTh>
+                        <MudTh>상태</MudTh>
+                        <MudTh>작업</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="ID">@context.Id</MudTd>
+                        <MudTd DataLabel="이름">@context.Name</MudTd>
+                        <MudTd DataLabel="URL Slug">@context.UrlSlug</MudTd>
+                        <MudTd DataLabel="설명">@(string.IsNullOrEmpty(context.Description) ? "-" : context.Description)</MudTd>
+                        <MudTd DataLabel="순서">@context.DisplayOrder</MudTd>
+                        <MudTd DataLabel="게시글 수">@context.Posts.Count(p => !p.IsDeleted)</MudTd>
+                        <MudTd DataLabel="상태">
+                            <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">
+                                @(context.IsActive ? "활성" : "비활성")
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="작업">
+                            <MudStack Row="true" Spacing="1">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                             Color="Color.Info"
+                                             Size="Size.Small"
+                                             OnClick="@(() => EditCategoryAsync(context))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                             Color="Color.Error"
+                                             Size="Size.Small"
+                                             OnClick="@(() => DeleteCategoryAsync(context))" />
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudTabPanel>
+    </MudTabs>
+</MudContainer>
+
+@code {
+    // User management
+    private bool _isLoadingUsers = true;
+    private List<User> _users = new();
+    private int _totalUserCount = 0;
+    private string _searchQuery = string.Empty;
+
+    // Category management
+    private bool _isLoadingCategories = true;
+    private List<Category> _categories = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 순차적으로 호출하여 DbContext 동시 접근 방지
+        await LoadUsersAsync();
+        await LoadCategoriesAsync();
+    }
+
+    #region User Management
+
+    private async Task LoadUsersAsync()
+    {
+        _isLoadingUsers = true;
+        StateHasChanged();
+
+        var (users, totalCount) = await UserService.GetUsersPagedAsync(1, 100);
+        _users = users;
+        _totalUserCount = totalCount;
+
+        _isLoadingUsers = false;
+        StateHasChanged();
+    }
+
+    private async Task SearchUsersAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            await LoadUsersAsync();
+            return;
+        }
+
+        _isLoadingUsers = true;
+        StateHasChanged();
+
+        _users = await UserService.SearchUsersAsync(_searchQuery);
+        _totalUserCount = _users.Count;
+
+        _isLoadingUsers = false;
+        StateHasChanged();
+    }
+
+    private async Task EditUserAsync(User user)
+    {
+        var parameters = new DialogParameters<EditUserDialog>
+        {
+            { x => x.UserId, user.Id },
+            { x => x.Email, user.Email },
+            { x => x.DisplayName, user.DisplayName }
+        };
+
+        var dialog = await DialogService.ShowAsync<EditUserDialog>("사용자 정보 수정", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadUsersAsync();
+            Snackbar.Add("사용자 정보가 수정되었습니다.", Severity.Success);
+        }
+    }
+
+    private async Task ManageRolesAsync(User user)
+    {
+        var parameters = new DialogParameters<ManageRolesDialog>
+        {
+            { x => x.UserId, user.Id },
+            { x => x.Username, user.Username }
+        };
+
+        var dialog = await DialogService.ShowAsync<ManageRolesDialog>("역할 관리", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadUsersAsync();
+            Snackbar.Add("역할이 변경되었습니다.", Severity.Success);
+        }
+    }
+
+    private async Task ToggleUserStatusAsync(User user)
+    {
+        var action = user.IsActive ? "비활성화" : "활성화";
+        var confirmed = await DialogService.ShowMessageBox(
+            "확인",
+            $"{user.Username} 사용자를 {action}하시겠습니까?",
+            yesText: "확인",
+            cancelText: "취소"
+        );
+
+        if (confirmed == true)
+        {
+            var success = await UserService.SetUserActiveStatusAsync(user.Id, !user.IsActive);
+            if (success)
+            {
+                await LoadUsersAsync();
+                Snackbar.Add($"사용자가 {action}되었습니다.", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("작업 실패", Severity.Error);
+            }
+        }
+    }
+
+    #endregion
+
+    #region Category Management
+
+    private async Task LoadCategoriesAsync()
+    {
+        _isLoadingCategories = true;
+        StateHasChanged();
+
+        _categories = await CategoryService.GetAllCategoriesAsync();
+
+        _isLoadingCategories = false;
+        StateHasChanged();
+    }
+
+    private async Task CreateCategoryAsync()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<CreateCategoryDialog>("새 카테고리 추가", options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadCategoriesAsync();
+            Snackbar.Add("카테고리가 생성되었습니다.", Severity.Success);
+        }
+    }
+
+    private async Task EditCategoryAsync(Category category)
+    {
+        var parameters = new DialogParameters<EditCategoryDialog>
+        {
+            { x => x.CategoryId, category.Id },
+            { x => x.Name, category.Name },
+            { x => x.UrlSlug, category.UrlSlug },
+            { x => x.Description, category.Description },
+            { x => x.DisplayOrder, category.DisplayOrder },
+            { x => x.IsActive, category.IsActive }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<EditCategoryDialog>("카테고리 수정", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadCategoriesAsync();
+            Snackbar.Add("카테고리가 수정되었습니다.", Severity.Success);
+        }
+    }
+
+    private async Task DeleteCategoryAsync(Category category)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "확인",
+            $"'{category.Name}' 카테고리를 삭제하시겠습니까? 이 카테고리에 게시글이 있으면 삭제할 수 없습니다.",
+            yesText: "삭제",
+            cancelText: "취소"
+        );
+
+        if (confirmed == true)
+        {
+            var success = await CategoryService.DeleteCategoryAsync(category.Id);
+            if (success)
+            {
+                await LoadCategoriesAsync();
+                Snackbar.Add("카테고리가 삭제되었습니다.", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("카테고리를 삭제할 수 없습니다. 게시글이 존재합니다.", Severity.Error);
+            }
+        }
+    }
+
+    #endregion
+}

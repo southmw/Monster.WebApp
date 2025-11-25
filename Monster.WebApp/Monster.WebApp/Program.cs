@@ -4,8 +4,11 @@ using Microsoft.AspNetCore.Components;
 using Monster.WebApp.Components;
 using Monster.WebApp.Data;
 using Monster.WebApp.Services.Auth;
+using Monster.WebApp.Services;
 using Monster.WebApp.Services.Board;
+using Monster.WebApp.Shared;
 using MudBlazor.Services;
+using Serilog;
 
 namespace Monster.WebApp
 {
@@ -15,10 +18,21 @@ namespace Monster.WebApp
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // Add DbContext
+            // Configure Serilog
+            Log.Logger = new LoggerConfiguration()
+                .WriteTo.Console()
+                .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day)
+                .CreateLogger();
+
+            builder.Host.UseSerilog();
+
+            // Add DbContext with Factory for Blazor Server concurrency support
             var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-            builder.Services.AddDbContext<ApplicationDbContext>(options =>
+            builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
                 options.UseSqlServer(connectionString));
+            // Also register DbContext for backward compatibility
+            builder.Services.AddScoped<ApplicationDbContext>(sp =>
+                sp.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext());
 
             // Add HttpContextAccessor
             builder.Services.AddHttpContextAccessor();
@@ -43,9 +57,9 @@ namespace Monster.WebApp
 
             builder.Services.AddAuthorization(options =>
             {
-                options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
-                options.AddPolicy("SubAdminOrHigher", policy => policy.RequireRole("Admin", "SubAdmin"));
-                options.AddPolicy("AuthenticatedUser", policy => policy.RequireAuthenticatedUser());
+                options.AddPolicy(AppConstants.Policies.AdminOnly, policy => policy.RequireRole(AppConstants.Roles.Admin));
+                options.AddPolicy(AppConstants.Policies.SubAdminOrHigher, policy => policy.RequireRole(AppConstants.Roles.Admin, AppConstants.Roles.SubAdmin));
+                options.AddPolicy(AppConstants.Policies.AuthenticatedUser, policy => policy.RequireAuthenticatedUser());
             });
 
             // Add application services
@@ -56,8 +70,20 @@ namespace Monster.WebApp
             builder.Services.AddScoped<CategoryService>();
             builder.Services.AddScoped<PostService>();
             builder.Services.AddScoped<CommentService>();
+            builder.Services.AddScoped<FileUploadService>();
 
             builder.Services.AddMudServices();
+
+            // Configure file upload size limits
+            builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+            {
+                options.MultipartBodyLengthLimit = 52428800; // 50MB
+            });
+
+            builder.WebHost.ConfigureKestrel(options =>
+            {
+                options.Limits.MaxRequestBodySize = 52428800; // 50MB
+            });
 
             // Add controllers for API endpoints
             builder.Services.AddControllers();
@@ -81,10 +107,10 @@ namespace Monster.WebApp
                 app.UseHsts();
             }
 
-            app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+            app.UseStatusCodePagesWithReExecute("/not-found");
             app.UseHttpsRedirection();
 
-            app.MapStaticAssets();
+            app.UseStaticFiles();
 
             app.UseAuthentication();
             app.UseAuthorization();
@@ -92,6 +118,7 @@ namespace Monster.WebApp
             app.UseAntiforgery();
 
             app.MapControllers();
+
             app.MapRazorComponents<App>()
                 .AddInteractiveServerRenderMode()
                 .AddInteractiveWebAssemblyRenderMode()
@@ -107,6 +134,7 @@ namespace Monster.WebApp
         {
             using var scope = app.Services.CreateScope();
             var services = scope.ServiceProvider;
+            var logger = services.GetRequiredService<ILogger<Program>>();
 
             try
             {
@@ -129,18 +157,18 @@ namespace Monster.WebApp
                     if (newUser != null)
                     {
                         // Get Admin role
-                        var adminRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == "Admin");
+                        var adminRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == AppConstants.Roles.Admin);
                         if (adminRole != null)
                         {
                             await roleService.AssignRoleAsync(newUser.Id, adminRole.Id);
-                            Console.WriteLine("기본 관리자 계정이 생성되었습니다. (Username: admin, Password: Admin@123!)");
+                            logger.LogInformation("기본 관리자 계정이 생성되었습니다. (Username: admin, Password: Admin@123!)");
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"관리자 계정 초기화 실패: {ex.Message}");
+                logger.LogError(ex, "관리자 계정 초기화 실패");
             }
         }
     }

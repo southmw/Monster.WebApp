@@ -5,24 +5,27 @@ using Monster.WebApp.Models.Board;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Monster.WebApp.Shared;
 
 namespace Monster.WebApp.Services.Auth;
 
 public class AuthService
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public AuthService(ApplicationDbContext context, IHttpContextAccessor httpContextAccessor)
+    public AuthService(IDbContextFactory<ApplicationDbContext> contextFactory, IHttpContextAccessor httpContextAccessor)
     {
-        _context = context;
+        _contextFactory = contextFactory;
         _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task<User?> RegisterAsync(string username, string email, string password, string displayName)
     {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
         // Check if username or email already exists
-        if (await _context.Users.AnyAsync(u => u.Username == username || u.Email == email))
+        if (await context.Users.AnyAsync(u => u.Username == username || u.Email == email))
         {
             return null;
         }
@@ -37,20 +40,20 @@ public class AuthService
             IsActive = true
         };
 
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
 
         // Assign default "User" role
-        var userRole = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "User");
+        var userRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == AppConstants.Roles.User);
         if (userRole != null)
         {
-            _context.UserRoles.Add(new UserRole
+            context.UserRoles.Add(new UserRole
             {
                 UserId = user.Id,
                 RoleId = userRole.Id,
                 AssignedAt = DateTime.UtcNow
             });
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
         }
 
         return user;
@@ -58,7 +61,9 @@ public class AuthService
 
     public async Task<User?> LoginAsync(string username, string password)
     {
-        var user = await _context.Users
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var user = await context.Users
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(u => u.Username == username && u.IsActive);
@@ -125,7 +130,8 @@ public class AuthService
             return null;
         }
 
-        return await _context.Users
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Users
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(u => u.Id == userId);
@@ -152,5 +158,27 @@ public class AuthService
     {
         var httpContext = _httpContextAccessor.HttpContext;
         return httpContext?.User?.Identity?.IsAuthenticated == true;
+    }
+
+    public string? GetCurrentUserDisplayName()
+    {
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext?.User?.Identity?.IsAuthenticated != true)
+        {
+            return null;
+        }
+
+        var displayNameClaim = httpContext.User.FindFirst("DisplayName");
+        return displayNameClaim?.Value;
+    }
+
+    public bool IsAdmin()
+    {
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext?.User?.Identity?.IsAuthenticated != true)
+        {
+            return false;
+        }
+        return httpContext.User.IsInRole(AppConstants.Roles.Admin);
     }
 }

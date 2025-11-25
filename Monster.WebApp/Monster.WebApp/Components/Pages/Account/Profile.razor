@@ -1,0 +1,319 @@
+@page "/profile"
+@using Monster.WebApp.Services.Auth
+@using Monster.WebApp.Services.Board
+@using Monster.WebApp.Models.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject AuthService AuthService
+@inject UserService UserService
+@inject PostService PostService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<PageTitle>내 프로필 - Southmw</PageTitle>
+
+@if (_isLoading)
+{
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Class="d-flex mx-auto mt-8" />
+}
+else if (_user == null)
+{
+    <MudAlert Severity="Severity.Warning" Class="mt-4">
+        사용자 정보를 불러올 수 없습니다.
+    </MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+        <!-- Profile Header -->
+        <MudPaper Class="pa-6 mb-4" Style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px;">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="4">
+                <MudAvatar Size="Size.Large" Style="width: 80px; height: 80px; font-size: 2rem; background-color: rgba(255,255,255,0.2); color: white;">
+                    @(_user.DisplayName?.FirstOrDefault().ToString().ToUpper() ?? "U")
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.h5" Style="color: white; font-weight: 700;">@_user.DisplayName</MudText>
+                    <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.8);">@@@_user.Username</MudText>
+                    <MudStack Row="true" Spacing="1" Class="mt-2">
+                        @foreach (var userRole in _user.UserRoles)
+                        {
+                            <MudChip T="string" Size="Size.Small" Style="background-color: rgba(255,255,255,0.2); color: white;">
+                                @userRole.Role.DisplayName
+                            </MudChip>
+                        }
+                    </MudStack>
+                </div>
+            </MudStack>
+        </MudPaper>
+
+        <MudGrid Spacing="3">
+            <!-- Profile Information -->
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6" Style="font-weight: 600;">기본 정보</MudText>
+                            </MudStack>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" OnClick="ToggleEditMode" />
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @if (_isEditMode)
+                        {
+                            <MudStack Spacing="3">
+                                <MudTextField @bind-Value="_editEmail" Label="이메일" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                <MudTextField @bind-Value="_editDisplayName" Label="표시 이름" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+                                    <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="CancelEdit">취소</MudButton>
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveProfileAsync">저장</MudButton>
+                                </MudStack>
+                            </MudStack>
+                        }
+                        else
+                        {
+                            <MudList T="string" Dense="true">
+                                <MudListItem T="string">
+                                    <div class="d-flex justify-space-between">
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">사용자명</MudText>
+                                        <MudText Typo="Typo.body2">@_user.Username</MudText>
+                                    </div>
+                                </MudListItem>
+                                <MudListItem T="string">
+                                    <div class="d-flex justify-space-between">
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">이메일</MudText>
+                                        <MudText Typo="Typo.body2">@_user.Email</MudText>
+                                    </div>
+                                </MudListItem>
+                                <MudListItem T="string">
+                                    <div class="d-flex justify-space-between">
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">표시 이름</MudText>
+                                        <MudText Typo="Typo.body2">@_user.DisplayName</MudText>
+                                    </div>
+                                </MudListItem>
+                                <MudListItem T="string">
+                                    <div class="d-flex justify-space-between">
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">가입일</MudText>
+                                        <MudText Typo="Typo.body2">@_user.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</MudText>
+                                    </div>
+                                </MudListItem>
+                            </MudList>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Password Change -->
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6" Style="font-weight: 600;">비밀번호 변경</MudText>
+                            </MudStack>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudStack Spacing="3">
+                            <MudTextField @bind-Value="_currentPassword" Label="현재 비밀번호"
+                                         InputType="@(_showCurrentPassword ? InputType.Text : InputType.Password)"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense"
+                                         Adornment="Adornment.End"
+                                         AdornmentIcon="@(_showCurrentPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                         OnAdornmentClick="() => _showCurrentPassword = !_showCurrentPassword" />
+                            <MudTextField @bind-Value="_newPassword" Label="새 비밀번호"
+                                         InputType="@(_showNewPassword ? InputType.Text : InputType.Password)"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense"
+                                         Adornment="Adornment.End"
+                                         AdornmentIcon="@(_showNewPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                         OnAdornmentClick="() => _showNewPassword = !_showNewPassword" />
+                            <MudTextField @bind-Value="_confirmPassword" Label="비밀번호 확인"
+                                         InputType="@(_showConfirmPassword ? InputType.Text : InputType.Password)"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense"
+                                         Adornment="Adornment.End"
+                                         AdornmentIcon="@(_showConfirmPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                         OnAdornmentClick="() => _showConfirmPassword = !_showConfirmPassword" />
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                      FullWidth="true" OnClick="ChangePasswordAsync">
+                                비밀번호 변경
+                            </MudButton>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Activity Statistics -->
+            <MudItem xs="12">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.BarChart" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6" Style="font-weight: 600;">활동 통계</MudText>
+                            </MudStack>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid Spacing="3">
+                            <MudItem xs="6" sm="3">
+                                <MudPaper Class="pa-4 text-center" Elevation="0" Style="background-color: #f5f5f5; border-radius: 12px;">
+                                    <MudText Typo="Typo.h4" Color="Color.Primary" Style="font-weight: 700;">@_postCount</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">작성 게시글</MudText>
+                                </MudPaper>
+                            </MudItem>
+                            <MudItem xs="6" sm="3">
+                                <MudPaper Class="pa-4 text-center" Elevation="0" Style="background-color: #f5f5f5; border-radius: 12px;">
+                                    <MudText Typo="Typo.h4" Color="Color.Primary" Style="font-weight: 700;">@_commentCount</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">작성 댓글</MudText>
+                                </MudPaper>
+                            </MudItem>
+                            <MudItem xs="6" sm="3">
+                                <MudPaper Class="pa-4 text-center" Elevation="0" Style="background-color: #f5f5f5; border-radius: 12px;">
+                                    <MudText Typo="Typo.h4" Color="Color.Primary" Style="font-weight: 700;">@_totalViews</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">총 조회수</MudText>
+                                </MudPaper>
+                            </MudItem>
+                            <MudItem xs="6" sm="3">
+                                <MudPaper Class="pa-4 text-center" Elevation="0" Style="background-color: #f5f5f5; border-radius: 12px;">
+                                    <MudText Typo="Typo.h4" Color="Color.Primary" Style="font-weight: 700;">@_totalVotes</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">받은 추천</MudText>
+                                </MudPaper>
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    </MudContainer>
+}
+
+@code {
+    private bool _isLoading = true;
+    private User? _user;
+    private bool _isEditMode = false;
+
+    // Edit fields
+    private string _editEmail = string.Empty;
+    private string _editDisplayName = string.Empty;
+
+    // Password change fields
+    private string _currentPassword = string.Empty;
+    private string _newPassword = string.Empty;
+    private string _confirmPassword = string.Empty;
+    private bool _showCurrentPassword = false;
+    private bool _showNewPassword = false;
+    private bool _showConfirmPassword = false;
+
+    // Statistics
+    private int _postCount = 0;
+    private int _commentCount = 0;
+    private int _totalViews = 0;
+    private int _totalVotes = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await AuthService.GetCurrentUserAsync();
+
+        if (_user != null)
+        {
+            _editEmail = _user.Email;
+            _editDisplayName = _user.DisplayName;
+
+            // Load statistics
+            var stats = await UserService.GetUserStatisticsAsync(_user.Id);
+            _postCount = stats.PostCount;
+            _commentCount = stats.CommentCount;
+            _totalViews = stats.TotalViews;
+            _totalVotes = stats.TotalVotes;
+        }
+
+        _isLoading = false;
+    }
+
+    private void ToggleEditMode()
+    {
+        _isEditMode = !_isEditMode;
+        if (_isEditMode && _user != null)
+        {
+            _editEmail = _user.Email;
+            _editDisplayName = _user.DisplayName;
+        }
+    }
+
+    private void CancelEdit()
+    {
+        _isEditMode = false;
+        if (_user != null)
+        {
+            _editEmail = _user.Email;
+            _editDisplayName = _user.DisplayName;
+        }
+    }
+
+    private async Task SaveProfileAsync()
+    {
+        if (_user == null) return;
+
+        if (string.IsNullOrWhiteSpace(_editEmail) || string.IsNullOrWhiteSpace(_editDisplayName))
+        {
+            Snackbar.Add("이메일과 표시 이름을 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        var success = await UserService.UpdateUserProfileAsync(_user.Id, _editEmail, _editDisplayName);
+        if (success)
+        {
+            _user.Email = _editEmail;
+            _user.DisplayName = _editDisplayName;
+            _isEditMode = false;
+            Snackbar.Add("프로필이 수정되었습니다.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("프로필 수정에 실패했습니다.", Severity.Error);
+        }
+    }
+
+    private async Task ChangePasswordAsync()
+    {
+        if (_user == null) return;
+
+        if (string.IsNullOrWhiteSpace(_currentPassword) ||
+            string.IsNullOrWhiteSpace(_newPassword) ||
+            string.IsNullOrWhiteSpace(_confirmPassword))
+        {
+            Snackbar.Add("모든 비밀번호 필드를 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        if (_newPassword != _confirmPassword)
+        {
+            Snackbar.Add("새 비밀번호가 일치하지 않습니다.", Severity.Warning);
+            return;
+        }
+
+        if (_newPassword.Length < 6)
+        {
+            Snackbar.Add("비밀번호는 최소 6자 이상이어야 합니다.", Severity.Warning);
+            return;
+        }
+
+        var success = await UserService.ChangePasswordAsync(_user.Id, _currentPassword, _newPassword);
+        if (success)
+        {
+            _currentPassword = string.Empty;
+            _newPassword = string.Empty;
+            _confirmPassword = string.Empty;
+            Snackbar.Add("비밀번호가 변경되었습니다.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("현재 비밀번호가 올바르지 않습니다.", Severity.Error);
+        }
+    }
+}

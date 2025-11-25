@@ -1,57 +1,93 @@
 @using Monster.WebApp.Services.Auth
-@inject RoleService RoleService
+@using Monster.WebApp.Services.Board
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceScopeFactory ScopeFactory
 @rendermode InteractiveServer
 
-<MudNavMenu Style="padding: 8px 0;">
-    <MudNavLink Href=""
-                Match="NavLinkMatch.All"
-                Icon="@Icons.Material.Outlined.Home"
-                IconColor="Color.Primary"
-                Class="nav-menu-item">
-        홈
-    </MudNavLink>
-    <MudNavLink Href="board"
-                Icon="@Icons.Material.Outlined.Forum"
-                IconColor="Color.Secondary"
-                Class="nav-menu-item">
-        게시판
-    </MudNavLink>
+<MudNavMenu Class="mud-width-full">
+    <MudText Typo="Typo.subtitle2" Color="Color.Inherit" Class="px-4 mt-4 mb-2" Style="color: var(--mud-palette-drawer-text); opacity: 0.5;">MENU</MudText>
+
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home" IconColor="Color.Inherit">홈</MudNavLink>
+
+    @if (_categories != null && _categories.Any())
+    {
+        @foreach (var category in _categories)
+        {
+            <MudNavLink Href="@($"/board/{category.UrlSlug}")" Match="NavLinkMatch.Prefix" Icon="@GetCategoryIcon(category.UrlSlug)" IconColor="Color.Inherit">@category.Name</MudNavLink>
+        }
+    }
+
     @if (_isAdmin)
     {
-        <MudDivider Class="my-2" />
-        <MudNavGroup Title="관리자"
-                     Icon="@Icons.Material.Outlined.AdminPanelSettings"
-                     IconColor="Color.Error"
-                     Expanded="false"
-                     Class="nav-menu-item">
-            <MudNavLink Href="admin"
-                        Icon="@Icons.Material.Outlined.Dashboard"
-                        IconColor="Color.Error"
-                        Class="nav-menu-item">
-                대시보드
-            </MudNavLink>
-            <MudNavLink Href="admin/users"
-                        Icon="@Icons.Material.Outlined.People"
-                        IconColor="Color.Error"
-                        Class="nav-menu-item">
-                사용자 관리
-            </MudNavLink>
-            <MudNavLink Href="admin/categories"
-                        Icon="@Icons.Material.Outlined.Category"
-                        IconColor="Color.Error"
-                        Class="nav-menu-item">
-                카테고리 관리
-            </MudNavLink>
-        </MudNavGroup>
+        <MudText Typo="Typo.subtitle2" Color="Color.Inherit" Class="px-4 mt-6 mb-2" Style="color: var(--mud-palette-drawer-text); opacity: 0.5;">ADMIN</MudText>
+
+        <MudNavLink Href="/admin" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard" IconColor="Color.Inherit">대시보드</MudNavLink>
+        <MudNavLink Href="/admin/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings" IconColor="Color.Inherit">설정</MudNavLink>
     }
 </MudNavMenu>
 
+<style>
+    /* Override NavLink styles for better contrast in dark sidebar */
+    .mud-nav-link {
+        color: var(--mud-palette-drawer-text) !important;
+        border-radius: 8px;
+        margin: 0 8px;
+    }
+
+    .mud-nav-link:hover:not(.mud-nav-link-disabled) {
+        background-color: rgba(255,255,255,0.1) !important;
+    }
+
+    .mud-nav-link.active:not(.mud-nav-link-disabled) {
+        background-color: var(--mud-palette-primary) !important;
+        color: #ffffff !important;
+    }
+
+    .mud-nav-link .mud-icon-root {
+        color: inherit !important;
+    }
+</style>
+
 @code {
     private bool _isAdmin = false;
+    private List<Monster.WebApp.Models.Board.Category>? _categories;
+    private bool _isLoaded = false;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        _isAdmin = await RoleService.IsAdminAsync();
+        if (firstRender && !_isLoaded)
+        {
+            _isLoaded = true;
+            await LoadDataAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        // 각 서비스 호출에 독립적인 scope 사용하여 DbContext 충돌 방지
+        using (var scope = ScopeFactory.CreateScope())
+        {
+            var categoryService = scope.ServiceProvider.GetRequiredService<CategoryService>();
+            _categories = await categoryService.GetAllActiveCategoriesAsync();
+        }
+
+        using (var scope = ScopeFactory.CreateScope())
+        {
+            var roleService = scope.ServiceProvider.GetRequiredService<RoleService>();
+            _isAdmin = await roleService.IsAdminAsync();
+        }
+    }
+
+    private string GetCategoryIcon(string urlSlug)
+    {
+        return urlSlug switch
+        {
+            "free" => Icons.Material.Filled.Chat,
+            "questions" => Icons.Material.Filled.Help,
+            "info" => Icons.Material.Filled.Info,
+            "notice" => Icons.Material.Filled.Announcement,
+            _ => Icons.Material.Filled.Article
+        };
     }
 }
-

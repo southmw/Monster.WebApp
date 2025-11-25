@@ -8,73 +8,82 @@ public static class CustomTheme
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#6366f1",
-            Secondary = "#ec4899",
+            Primary = "#6366F1", // Indigo 500
+            Secondary = "#94A3B8", // Slate 400
             Success = "#10b981",
             Info = "#06b6d4",
             Warning = "#f59e0b",
             Error = "#ef4444",
-            AppbarBackground = "#ffffff",
-            AppbarText = "#1f2937",
-            DrawerBackground = "#f9fafb",
-            DrawerText = "#1f2937",
-            Background = "#ffffff",
-            Surface = "#ffffff",
-            TextPrimary = "#1f2937",
-            TextSecondary = "#6b7280"
+            AppbarBackground = "#FFFFFF",
+            AppbarText = "#0F172A", // Slate 900
+            DrawerBackground = "#1E293B", // Slate 800 (Dark Sidebar)
+            DrawerText = "#F8FAFC", // Slate 50
+            DrawerIcon = "#CBD5E1", // Slate 300
+            Background = "#F1F5F9", // Slate 100 (Light Gray Background)
+            Surface = "#FFFFFF",
+            TextPrimary = "#0F172A", // Slate 900
+            TextSecondary = "#64748B", // Slate 500
+            ActionDefault = "#64748B",
+            ActionDisabled = "#94A3B8",
+            ActionDisabledBackground = "#E2E8F0"
         },
         PaletteDark = new PaletteDark
         {
-            Primary = "#818cf8",
-            Secondary = "#f472b6",
+            Primary = "#818CF8", // Indigo 400
+            Secondary = "#94A3B8",
             Success = "#34d399",
             Info = "#22d3ee",
             Warning = "#fbbf24",
             Error = "#f87171",
-            AppbarBackground = "#1e293b",
-            AppbarText = "#e2e8f0",
-            DrawerBackground = "#1e293b",
-            DrawerText = "#e2e8f0",
-            Background = "#0f172a",
-            Surface = "#1e293b",
-            TextPrimary = "#e2e8f0",
-            TextSecondary = "#94a3b8"
+            AppbarBackground = "#1E293B", // Slate 800
+            AppbarText = "#E2E8F0",
+            DrawerBackground = "#0F172A", // Slate 900
+            DrawerText = "#E2E8F0",
+            DrawerIcon = "#94A3B8",
+            Background = "#0F172A", // Slate 900
+            Surface = "#1E293B", // Slate 800
+            TextPrimary = "#E2E8F0",
+            TextSecondary = "#94A3B8",
+            ActionDefault = "#94A3B8",
+            ActionDisabled = "#475569",
+            ActionDisabledBackground = "#334155"
         },
         LayoutProperties = new LayoutProperties
         {
-            DefaultBorderRadius = "12px"
+            DefaultBorderRadius = "8px",
+            DrawerWidthLeft = "260px"
         },
         Shadows = new Shadow
         {
             Elevation = new[]
             {
                 "none",
-                "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+                "0 1px 2px 0 rgba(0, 0, 0, 0.05)", // Soft shadow
                 "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
                 "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
                 "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
                 "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
                 "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-                "0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-                "0 4px 8px -2px rgba(0, 0, 0, 0.1), 0 6px 12px -2px rgba(0, 0, 0, 0.1)",
-                "0 8px 16px -4px rgba(0, 0, 0, 0.1), 0 6px 16px -4px rgba(0, 0, 0, 0.1)",
-                "0 12px 24px -6px rgba(0, 0, 0, 0.1), 0 8px 20px -6px rgba(0, 0, 0, 0.1)",
-                "0 16px 32px -8px rgba(0, 0, 0, 0.1), 0 10px 24px -8px rgba(0, 0, 0, 0.1)",
-                "0 20px 40px -10px rgba(0, 0, 0, 0.1), 0 12px 28px -10px rgba(0, 0, 0, 0.1)",
-                "0 24px 48px -12px rgba(0, 0, 0, 0.15), 0 14px 32px -12px rgba(0, 0, 0, 0.1)",
-                "0 28px 56px -14px rgba(0, 0, 0, 0.15), 0 16px 36px -14px rgba(0, 0, 0, 0.1)",
-                "0 32px 64px -16px rgba(0, 0, 0, 0.15), 0 18px 40px -16px rgba(0, 0, 0, 0.1)",
-                "0 36px 72px -18px rgba(0, 0, 0, 0.15), 0 20px 44px -18px rgba(0, 0, 0, 0.1)",
-                "0 40px 80px -20px rgba(0, 0, 0, 0.15), 0 22px 48px -20px rgba(0, 0, 0, 0.1)",
-                "0 44px 88px -22px rgba(0, 0, 0, 0.15), 0 24px 52px -22px rgba(0, 0, 0, 0.1)",
-                "0 48px 96px -24px rgba(0, 0, 0, 0.15), 0 26px 56px -24px rgba(0, 0, 0, 0.1)",
-                "0 52px 104px -26px rgba(0, 0, 0, 0.15), 0 28px 60px -26px rgba(0, 0, 0, 0.1)",
-                "0 56px 112px -28px rgba(0, 0, 0, 0.15), 0 30px 64px -28px rgba(0, 0, 0, 0.1)",
-                "0 60px 120px -30px rgba(0, 0, 0, 0.15), 0 32px 68px -30px rgba(0, 0, 0, 0.1)",
-                "0 64px 128px -32px rgba(0, 0, 0, 0.15), 0 34px 72px -32px rgba(0, 0, 0, 0.1)",
-                "0 68px 136px -34px rgba(0, 0, 0, 0.15), 0 36px 76px -34px rgba(0, 0, 0, 0.1)",
-                "0 72px 144px -36px rgba(0, 0, 0, 0.15), 0 38px 80px -36px rgba(0, 0, 0, 0.1)"
+                "none", "none", "none", "none", "none", "none", "none", "none", "none", "none", "none", "none", "none", "none", "none", "none", "none", "none", "none" // Clear higher elevations to enforce flat look if needed
             }
+        },
+        Typography = new Typography
+        {
+            Default = new Default
+            {
+                FontFamily = new[] { "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif" },
+                FontSize = ".875rem",
+                FontWeight = 400,
+                LineHeight = 1.6,
+                LetterSpacing = ".005em"
+            },
+            H1 = new H1 { FontSize = "2.5rem", FontWeight = 700, LineHeight = 1.2 },
+            H2 = new H2 { FontSize = "2rem", FontWeight = 700, LineHeight = 1.2 },
+            H3 = new H3 { FontSize = "1.75rem", FontWeight = 700, LineHeight = 1.2 },
+            H4 = new H4 { FontSize = "1.5rem", FontWeight = 700, LineHeight = 1.2 },
+            H5 = new H5 { FontSize = "1.25rem", FontWeight = 600, LineHeight = 1.2 },
+            H6 = new H6 { FontSize = "1rem", FontWeight = 600, LineHeight = 1.2 },
+            Button = new Button { FontWeight = 600, TextTransform = "none" } // No uppercase buttons
         }
     };
 }

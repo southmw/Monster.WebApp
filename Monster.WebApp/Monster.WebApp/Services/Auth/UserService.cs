@@ -6,16 +6,17 @@ namespace Monster.WebApp.Services.Auth;
 
 public class UserService
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
 
-    public UserService(ApplicationDbContext context)
+    public UserService(IDbContextFactory<ApplicationDbContext> contextFactory)
     {
-        _context = context;
+        _contextFactory = contextFactory;
     }
 
     public async Task<List<User>> GetAllUsersAsync()
     {
-        return await _context.Users
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Users
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
             .OrderByDescending(u => u.CreatedAt)
@@ -24,7 +25,9 @@ public class UserService
 
     public async Task<(List<User> Users, int TotalCount)> GetUsersPagedAsync(int page = 1, int pageSize = 20)
     {
-        var query = _context.Users
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var query = context.Users
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role);
 
@@ -40,7 +43,8 @@ public class UserService
 
     public async Task<User?> GetUserByIdAsync(int userId)
     {
-        return await _context.Users
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Users
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(u => u.Id == userId);
@@ -48,7 +52,8 @@ public class UserService
 
     public async Task<User?> GetUserByUsernameAsync(string username)
     {
-        return await _context.Users
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Users
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(u => u.Username == username);
@@ -56,7 +61,8 @@ public class UserService
 
     public async Task<User?> GetUserByEmailAsync(string email)
     {
-        return await _context.Users
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Users
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(u => u.Email == email);
@@ -64,7 +70,9 @@ public class UserService
 
     public async Task<bool> UpdateUserAsync(int userId, string? email = null, string? displayName = null)
     {
-        var user = await _context.Users.FindAsync(userId);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var user = await context.Users.FindAsync(userId);
         if (user == null)
         {
             return false;
@@ -82,13 +90,15 @@ public class UserService
 
         user.UpdatedAt = DateTime.UtcNow;
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
         return true;
     }
 
     public async Task<bool> SetUserActiveStatusAsync(int userId, bool isActive)
     {
-        var user = await _context.Users.FindAsync(userId);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var user = await context.Users.FindAsync(userId);
         if (user == null)
         {
             return false;
@@ -97,27 +107,31 @@ public class UserService
         user.IsActive = isActive;
         user.UpdatedAt = DateTime.UtcNow;
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
         return true;
     }
 
     public async Task<bool> DeleteUserAsync(int userId)
     {
-        var user = await _context.Users.FindAsync(userId);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var user = await context.Users.FindAsync(userId);
         if (user == null)
         {
             return false;
         }
 
-        _context.Users.Remove(user);
-        await _context.SaveChangesAsync();
+        context.Users.Remove(user);
+        await context.SaveChangesAsync();
         return true;
     }
 
     public async Task<List<User>> SearchUsersAsync(string searchTerm)
     {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
         var lowerSearchTerm = searchTerm.ToLower();
-        return await _context.Users
+        return await context.Users
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
             .Where(u => u.Username.ToLower().Contains(lowerSearchTerm) ||
@@ -129,21 +143,107 @@ public class UserService
 
     public async Task<int> GetTotalUserCountAsync()
     {
-        return await _context.Users.CountAsync();
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Users.CountAsync();
     }
 
     public async Task<int> GetActiveUserCountAsync()
     {
-        return await _context.Users.CountAsync(u => u.IsActive);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Users.CountAsync(u => u.IsActive);
     }
 
     public async Task<List<User>> GetRecentUsersAsync(int count = 10)
     {
-        return await _context.Users
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Users
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
             .OrderByDescending(u => u.CreatedAt)
             .Take(count)
             .ToListAsync();
     }
+
+    public async Task<bool> UpdateUserProfileAsync(int userId, string email, string displayName)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var user = await context.Users.FindAsync(userId);
+        if (user == null)
+        {
+            return false;
+        }
+
+        // Check if email is already used by another user
+        var existingUser = await context.Users
+            .FirstOrDefaultAsync(u => u.Email == email && u.Id != userId);
+        if (existingUser != null)
+        {
+            return false;
+        }
+
+        user.Email = email;
+        user.DisplayName = displayName;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> ChangePasswordAsync(int userId, string currentPassword, string newPassword)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var user = await context.Users.FindAsync(userId);
+        if (user == null)
+        {
+            return false;
+        }
+
+        // Verify current password
+        if (!BCrypt.Net.BCrypt.Verify(currentPassword, user.PasswordHash))
+        {
+            return false;
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<UserStatistics> GetUserStatisticsAsync(int userId)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var postCount = await context.Posts
+            .CountAsync(p => p.UserId == userId && !p.IsDeleted);
+
+        var commentCount = await context.Comments
+            .CountAsync(c => c.UserId == userId && !c.IsDeleted);
+
+        var posts = await context.Posts
+            .Where(p => p.UserId == userId && !p.IsDeleted)
+            .ToListAsync();
+
+        var totalViews = posts.Sum(p => p.ViewCount);
+        var totalVotes = posts.Sum(p => p.VoteCount);
+
+        return new UserStatistics
+        {
+            PostCount = postCount,
+            CommentCount = commentCount,
+            TotalViews = totalViews,
+            TotalVotes = totalVotes
+        };
+    }
+}
+
+public class UserStatistics
+{
+    public int PostCount { get; set; }
+    public int CommentCount { get; set; }
+    public int TotalViews { get; set; }
+    public int TotalVotes { get; set; }
 }

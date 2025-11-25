@@ -12,7 +12,13 @@
       "Bash(taskkill:*)",
       "Bash(nul)",
       "Bash(Get-Process -Name dotnet -ErrorAction SilentlyContinue)",
-      "Bash(Stop-Process -Force)"
+      "Bash(Stop-Process -Force)",
+      "Bash(dotnet restore:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(timeout:*)",
+      "Bash(tasklist /FI 'IMAGENAME eq dotnet.exe' 2)",
+      "Bash(findstr:*)",
+      "Bash(ping:*)"
     ],
     "deny": [],
     "ask": []

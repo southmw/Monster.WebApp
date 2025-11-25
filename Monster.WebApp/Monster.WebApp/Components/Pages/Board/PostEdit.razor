@@ -1,0 +1,196 @@
+@page "/board/{categoryUrl}/{postId:int}/edit"
+@using Monster.WebApp.Services
+@using Monster.WebApp.Services.Auth
+@using Monster.WebApp.Models
+@inject CategoryService CategoryService
+@inject PostService PostService
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    @if (_isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (_post == null)
+    {
+        <MudPaper Elevation="0" Style="padding: 64px; text-align: center; border: 1px solid rgba(0, 0, 0, 0.08);">
+            <MudIcon Icon="@Icons.Material.Outlined.Error" Size="Size.Large" Color="Color.Error" Style="margin-bottom: 16px;" />
+            <MudText Typo="Typo.h6" Color="Color.Error">게시글을 찾을 수 없습니다</MudText>
+        </MudPaper>
+    }
+    else if (!_canEdit)
+    {
+        <MudPaper Elevation="0" Style="padding: 64px; text-align: center; border: 1px solid rgba(0, 0, 0, 0.08);">
+            <MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Large" Color="Color.Error" Style="margin-bottom: 16px;" />
+            <MudText Typo="Typo.h6" Color="Color.Error">수정 권한이 없습니다</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top: 8px;">
+                @_errorMessage
+            </MudText>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Href="@($"/board/{CategoryUrl}/{PostId}")"
+                       Style="margin-top: 24px;">
+                게시글로 돌아가기
+            </MudButton>
+        </MudPaper>
+    }
+    else
+    {
+        <MudText Typo="Typo.h4" Style="font-weight: 700; margin-bottom: 24px;">
+            <MudIcon Icon="@Icons.Material.Outlined.Edit" Style="vertical-align: middle;" />
+            게시글 수정 - @_post.Category.Name
+        </MudText>
+
+        <div class="write-container">
+            <div class="form-section">
+                <MudTextField @bind-Value="_title" Label="제목" Variant="Variant.Outlined"
+                              Required="true" FullWidth="true" Class="compact-input" Margin="Margin.Dense" />
+            </div>
+
+            <div class="form-section">
+                <MudTextField @bind-Value="_content" Label="내용" Variant="Variant.Outlined"
+                              Required="true" FullWidth="true" Lines="15"
+                              Placeholder="내용을 입력하세요..." Class="compact-input" Margin="Margin.Dense" />
+            </div>
+
+            <MudButtonGroup Size="Size.Medium" Style="margin-top: 16px;">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           OnClick="UpdatePost" Disabled="_isSubmitting"
+                           StartIcon="@Icons.Material.Outlined.Save">
+                    @(_isSubmitting ? "저장 중..." : "저장")
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+                           Href="@($"/board/{CategoryUrl}/{PostId}")"
+                           StartIcon="@Icons.Material.Outlined.Cancel">
+                    취소
+                </MudButton>
+            </MudButtonGroup>
+        </div>
+    }
+</MudContainer>
+
+@code {
+    [Parameter]
+    public string CategoryUrl { get; set; } = string.Empty;
+
+    [Parameter]
+    public int PostId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "verify")]
+    public string? VerifyPassword { get; set; }
+
+    private Post? _post;
+    private string _title = string.Empty;
+    private string _content = string.Empty;
+    private string? _password;
+    private bool _isLoading = true;
+    private bool _isSubmitting = false;
+    private bool _canEdit = false;
+    private string _errorMessage = string.Empty;
+    private int? _currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _currentUserId = AuthService.GetCurrentUserId();
+        _post = await PostService.GetPostByIdAsync(PostId);
+
+        if (_post == null)
+        {
+            _isLoading = false;
+            return;
+        }
+
+        // 권한 체크
+        if (_post.UserId == null)
+        {
+            // 익명 게시글 - 비밀번호 검증 필요
+            if (string.IsNullOrEmpty(VerifyPassword))
+            {
+                _canEdit = false;
+                _errorMessage = "비밀번호 확인이 필요합니다.";
+            }
+            else
+            {
+                // 비밀번호 검증
+                _password = Uri.UnescapeDataString(VerifyPassword);
+                if (_post.AuthorPassword != null && BCrypt.Net.BCrypt.Verify(_password, _post.AuthorPassword))
+                {
+                    _canEdit = true;
+                }
+                else
+                {
+                    _canEdit = false;
+                    _errorMessage = "비밀번호가 일치하지 않습니다.";
+                }
+            }
+        }
+        else
+        {
+            // 로그인 사용자 게시글 - 본인 확인
+            if (_currentUserId != null && _post.UserId == _currentUserId)
+            {
+                _canEdit = true;
+            }
+            else
+            {
+                _canEdit = false;
+                _errorMessage = "본인이 작성한 게시글만 수정할 수 있습니다.";
+            }
+        }
+
+        if (_canEdit)
+        {
+            _title = _post.Title;
+            _content = _post.Content;
+        }
+
+        _isLoading = false;
+    }
+
+    private async Task UpdatePost()
+    {
+        if (string.IsNullOrWhiteSpace(_title))
+        {
+            Snackbar.Add("제목을 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_content))
+        {
+            Snackbar.Add("내용을 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        _isSubmitting = true;
+
+        try
+        {
+            var updatedPost = new Post
+            {
+                Title = _title,
+                Content = _content
+            };
+
+            var success = await PostService.UpdatePostAsync(PostId, updatedPost, _password);
+
+            if (success)
+            {
+                Snackbar.Add("게시글이 수정되었습니다.", Severity.Success);
+                NavigationManager.NavigateTo($"/board/{CategoryUrl}/{PostId}");
+            }
+            else
+            {
+                Snackbar.Add("게시글 수정에 실패했습니다.", Severity.Error);
+                _isSubmitting = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"게시글 수정 중 오류가 발생했습니다: {ex.Message}", Severity.Error);
+            _isSubmitting = false;
+        }
+    }
+}
