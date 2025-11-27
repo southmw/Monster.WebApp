@@ -3,6 +3,7 @@
 @using Monster.WebApp.Services.Board
 @using Monster.WebApp.Models.Auth
 @using Microsoft.AspNetCore.Authorization
+@using Monster.WebApp.Shared
 @attribute [Authorize]
 @inject AuthService AuthService
 @inject UserService UserService
@@ -129,6 +130,7 @@ else
                             <MudTextField @bind-Value="_newPassword" Label="새 비밀번호"
                                          InputType="@(_showNewPassword ? InputType.Text : InputType.Password)"
                                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                                         HelperText="@PasswordValidator.PolicyHint"
                                          Adornment="Adornment.End"
                                          AdornmentIcon="@(_showNewPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
                                          OnAdornmentClick="() => _showNewPassword = !_showNewPassword" />
@@ -297,9 +299,10 @@ else
             return;
         }
 
-        if (_newPassword.Length < 6)
+        var passwordValidation = PasswordValidator.Validate(_newPassword);
+        if (!passwordValidation.IsValid)
         {
-            Snackbar.Add("비밀번호는 최소 6자 이상이어야 합니다.", Severity.Warning);
+            Snackbar.Add(passwordValidation.Message, Severity.Warning);
             return;
         }
 

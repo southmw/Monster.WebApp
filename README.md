@@ -2,7 +2,7 @@
 
 .NET 8.0 기반의 Blazor 웹 애플리케이션입니다. Interactive Server/WebAssembly 하이브리드 렌더링 모드를 사용하여 게시판 시스템과 사용자 관리 기능을 제공합니다.
 
-**최근 업데이트**: 2025-11-25
+**최근 업데이트**: 2025-11-27
 
 ## 주요 기능
 
@@ -12,8 +12,9 @@
 - 댓글 및 중첩 답글 (대댓글) 기능
 - 댓글/답글 수정/삭제 기능
 - 비밀번호 기반 게시글/댓글 보호
-- **관리자 권한** - 모든 게시글/댓글 삭제 가능 (비밀번호 불필요)
-- 조회수 및 추천 기능
+- **관리자 권한** - 모든 게시글/댓글 수정/삭제 가능 (비밀번호 불필요)
+- 조회수 기능 (세션 기반 중복 방지)
+- 추천 기능 (사용자/IP 기반 중복 방지)
 - 페이지네이션 (20개/페이지)
 - **검색 기능** - 게시글 제목/내용 검색
 
@@ -22,9 +23,11 @@
 - 역할 기반 접근 제어 (Admin, SubAdmin, User)
 - 사용자 관리 (활성화/비활성화)
 - 카테고리별 접근 권한 설정
+- **로그인 보안** - 5회 실패 시 15분 잠금
+- **비밀번호 정책** - 최소 8자, 대/소문자/숫자/특수문자 필수
 
 ### 관리자 기능
-- 사용자 관리 (생성, 수정, 역할 할당)
+- 사용자 관리 (생성, 수정, 역할 할당, **비밀번호 리셋**)
 - 카테고리 관리 (생성, 수정, 삭제, 활성화/비활성화)
 
 ### UI/UX 기능
@@ -33,6 +36,8 @@
 - **로그인 사용자 편의** - 댓글 작성 시 닉네임/비밀번호 자동 입력
 - **비밀번호 표시/숨김** - 로그인, 회원가입, 프로필 페이지에서 눈 아이콘으로 비밀번호 확인 가능
 - **엔터 키 로그인** - 로그인 화면에서 비밀번호 입력 후 엔터로 바로 로그인
+- **404 페이지 개선** - MudBlazor 스타일링 및 네비게이션 버튼
+- **접근 거부 페이지** - 권한 부족 시 표시
 
 ## 기술 스택
 
@@ -125,11 +130,11 @@ Monster.WebApp/
 │   ├── Data/                        # DbContext
 │   ├── Models/                      # 데이터 모델
 │   │   ├── Auth/                    # User, Role, UserRole, CategoryAccess
-│   │   └── Board/                   # Category, Post, Comment, Attachment
+│   │   └── Board/                   # Category, Post, Comment, Attachment, PostVote
 │   ├── Services/                    # 비즈니스 로직
 │   │   ├── Auth/                    # AuthService, UserService, RoleService
 │   │   └── Board/                   # CategoryService, PostService, CommentService
-│   └── Shared/                      # CustomTheme, AppConstants
+│   └── Shared/                      # CustomTheme, AppConstants, PasswordValidator
 └── Monster.WebApp.Client/           # 클라이언트 프로젝트 (WebAssembly)
 ```
 
@@ -185,6 +190,7 @@ Get-Process -Name dotnet -ErrorAction SilentlyContinue | Stop-Process -Force
 | `/admin` | 관리자 대시보드 |
 | `/admin/users` | 사용자 관리 |
 | `/admin/categories` | 카테고리 관리 |
+| `/admin/settings` | 설정 (관리 페이지 바로가기) |
 
 ## 보안
 

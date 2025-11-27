@@ -62,11 +62,20 @@ public class CommentService
         if (comment == null || comment.IsDeleted)
             return false;
 
+        // 관리자는 모든 댓글 수정 가능
+        if (_authService.IsAdmin())
+        {
+            comment.Content = content;
+            comment.UpdatedAt = DateTime.UtcNow;
+            await context.SaveChangesAsync();
+            return true;
+        }
+
         // Check authorization
         var userId = _authService.GetCurrentUserId();
         if (comment.UserId != null)
         {
-            // Authenticated comment - must be owner or admin
+            // Authenticated comment - must be owner
             if (userId != comment.UserId)
                 return false;
         }

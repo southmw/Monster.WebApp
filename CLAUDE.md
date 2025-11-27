@@ -68,7 +68,8 @@ using var context = await _contextFactory.CreateDbContextAsync();
 - **방식**: ASP.NET Core Cookie Authentication (7일 세션)
 - **역할**: Admin, SubAdmin, User
 - **정책**: AdminOnly, SubAdminOrHigher, AuthenticatedUser
-- **관리자 권한**: 모든 게시글/댓글 삭제 가능 (비밀번호 불필요)
+- **관리자 권한**: 모든 게시글/댓글 수정/삭제 가능 (비밀번호 불필요)
+- **로그인 보안**: 5회 실패 시 15분 잠금 (MemoryCache 기반)
 
 **초기 관리자**: admin / Admin@123! (프로덕션에서 즉시 변경 필요)
 
@@ -119,7 +120,7 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 
 ### 데이터 모델
 - **Auth**: User, Role, UserRole, CategoryAccess
-- **Board**: Category, Post, Comment, Attachment
+- **Board**: Category, Post, Comment, Attachment, PostVote
 
 ### 삭제 규칙
 - Post 삭제 → Comment/Attachment 자동 삭제 (Cascade)
@@ -142,6 +143,7 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 | `/admin` | 관리자 대시보드 | Admin |
 | `/admin/users` | 사용자 관리 | Admin |
 | `/admin/categories` | 카테고리 관리 | Admin |
+| `/admin/settings` | 설정 (관리 페이지 바로가기) | Admin |
 
 ## 로깅
 
@@ -164,14 +166,33 @@ Serilog를 사용하여 콘솔 및 파일 로깅:
 - **방식**: MudTextField (Lines="15") 사용하는 일반 텍스트 입력
 - **WYSIWYG 에디터**: Blazored.TextEditor (Quill.js)는 호환성 문제로 제거됨
 
-## 최근 변경사항 (2025-11-25)
+## 최근 변경사항 (2025-11-27)
 
-### 관리자 권한 강화
-- 관리자(Admin)는 모든 게시글/댓글 삭제 시 비밀번호 입력 불필요
-- `AuthService.IsAdmin()` 메서드 추가
-- `PostService.DeletePostAsync()`, `CommentService.DeleteCommentAsync()` 관리자 체크 추가
+### 보안 강화
+- 디버그 API `/api/auth/check-user/{username}` 제거
+- 게시글/댓글 수정 시 관리자 권한 체크 추가 (관리자는 비밀번호 없이 수정 가능)
+- AccessDenied 페이지 추가 (`Components/Pages/Account/AccessDenied.razor`)
+- 비밀번호 정책 강화: 최소 8자, 대문자/소문자/숫자/특수문자 각 1개 필수
+- 로그인 시도 제한: 5회 실패 시 15분 잠금 (IP + 사용자명 조합, MemoryCache 사용)
 
-### 로그인/회원가입 UX 개선
-- 비밀번호 표시/숨김 토글 (눈 아이콘)
-- 로그인 화면 엔터 키 로그인 지원 (`Immediate="true"`, `@onkeydown`)
-- 프로필 페이지 비밀번호 변경 시에도 표시/숨김 토글 적용
+### 기능 추가
+- **조회수 중복 방지**: 세션 기반 (같은 세션에서 재조회 시 카운트 증가 안함)
+- **추천 중복 방지**: PostVote 모델로 투표 기록 저장 (로그인 사용자: UserId, 비로그인: IP 주소)
+- **관리자 비밀번호 리셋**: UserList에서 사용자 비밀번호 재설정 가능
+
+### UX 개선
+- NotFound 페이지 MudBlazor 스타일링 및 홈/이전 페이지 버튼 추가
+- 비밀번호 표시/숨김 토글 (눈 아이콘) - Login, Register, Profile 페이지
+- 로그인 화면 엔터 키 로그인 지원
+
+### 성능 최적화
+- CategoryAccessService N+1 쿼리 해결 (전체 데이터 미리 로딩 후 메모리 필터링)
+
+### 신규 파일
+- `Components/Pages/Account/AccessDenied.razor` - 접근 거부 페이지
+- `Components/Pages/Admin/Users/ResetPasswordDialog.razor` - 비밀번호 리셋 다이얼로그
+- `Models/Board/PostVote.cs` - 게시글 추천 기록 모델
+- `Shared/PasswordValidator.cs` - 비밀번호 정책 검증 유틸리티
+
+### 코드 정리
+- `Settings.razor` 중복 코드 제거 - 기존 관리 페이지로 이동하는 카드 UI로 변경

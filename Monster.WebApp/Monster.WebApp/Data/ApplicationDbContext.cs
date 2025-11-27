@@ -20,6 +20,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Role> Roles { get; set; }
     public DbSet<UserRole> UserRoles { get; set; }
     public DbSet<CategoryAccess> CategoryAccesses { get; set; }
+    public DbSet<PostVote> PostVotes { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -134,6 +135,28 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasIndex(e => e.PostId);
+        });
+
+        // PostVote configuration
+        modelBuilder.Entity<PostVote>(entity =>
+        {
+            entity.HasOne(pv => pv.Post)
+                .WithMany()
+                .HasForeignKey(pv => pv.PostId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(pv => pv.User)
+                .WithMany()
+                .HasForeignKey(pv => pv.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Unique index: one vote per user per post
+            entity.HasIndex(e => new { e.PostId, e.UserId })
+                .IsUnique()
+                .HasFilter("[UserId] IS NOT NULL");
+
+            // Index for IP-based vote tracking (anonymous users)
+            entity.HasIndex(e => new { e.PostId, e.IpAddress });
         });
 
         // Seed initial roles

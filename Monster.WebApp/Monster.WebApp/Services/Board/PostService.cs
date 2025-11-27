@@ -9,11 +9,16 @@ public class PostService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly AuthService _authService;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public PostService(IDbContextFactory<ApplicationDbContext> contextFactory, AuthService authService)
+    public PostService(
+        IDbContextFactory<ApplicationDbContext> contextFactory,
+        AuthService authService,
+        IHttpContextAccessor httpContextAccessor)
     {
         _contextFactory = contextFactory;
         _authService = authService;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task<(List<Post> Posts, int TotalCount)> GetPostsByCategoryAsync(
@@ -91,11 +96,21 @@ public class PostService
         if (post == null || post.IsDeleted)
             return false;
 
+        // 관리자는 모든 게시글 수정 가능
+        if (_authService.IsAdmin())
+        {
+            post.Title = updatedPost.Title;
+            post.Content = updatedPost.Content;
+            post.UpdatedAt = DateTime.UtcNow;
+            await context.SaveChangesAsync();
+            return true;
+        }
+
         // Check authorization
         var userId = _authService.GetCurrentUserId();
         if (post.UserId != null)
         {
-            // Authenticated post - must be owner or admin
+            // Authenticated post - must be owner
             if (userId != post.UserId)
                 return false;
         }
@@ -156,8 +171,22 @@ public class PostService
         return true;
     }
 
-    public async Task IncrementViewCountAsync(int id)
+    /// <summary>
+    /// 조회수 증가 (세션 기반 중복 방지)
+    /// </summary>
+    public async Task<bool> IncrementViewCountAsync(int id)
     {
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext == null)
+            return false;
+
+        // 세션에서 이미 조회한 게시글인지 확인
+        var viewedPostsKey = $"viewed_post_{id}";
+        var hasViewed = httpContext.Session.GetString(viewedPostsKey);
+
+        if (hasViewed != null)
+            return false; // 이미 조회함
+
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         var post = await context.Posts.FindAsync(id);
@@ -165,21 +194,99 @@ public class PostService
         {
             post.ViewCount++;
             await context.SaveChangesAsync();
+
+            // 세션에 조회 기록 저장
+            httpContext.Session.SetString(viewedPostsKey, "1");
+            return true;
         }
+        return false;
     }
 
-    public async Task<bool> VotePostAsync(int id)
+    /// <summary>
+    /// 게시글 추천 (중복 방지)
+    /// </summary>
+    public async Task<(bool Success, string Message)> VotePostAsync(int id)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         var post = await context.Posts.FindAsync(id);
-        if (post != null && !post.IsDeleted)
+        if (post == null || post.IsDeleted)
+            return (false, "게시글을 찾을 수 없습니다.");
+
+        var userId = _authService.GetCurrentUserId();
+        var ipAddress = GetClientIpAddress();
+
+        // 중복 투표 체크
+        bool hasVoted;
+        if (userId != null)
         {
-            post.VoteCount++;
-            await context.SaveChangesAsync();
-            return true;
+            // 로그인 사용자: UserId로 체크
+            hasVoted = await context.PostVotes
+                .AnyAsync(v => v.PostId == id && v.UserId == userId);
         }
-        return false;
+        else
+        {
+            // 익명 사용자: IP로 체크
+            hasVoted = await context.PostVotes
+                .AnyAsync(v => v.PostId == id && v.IpAddress == ipAddress && v.UserId == null);
+        }
+
+        if (hasVoted)
+            return (false, "이미 추천한 게시글입니다.");
+
+        // 투표 기록 저장
+        var vote = new PostVote
+        {
+            PostId = id,
+            UserId = userId,
+            IpAddress = userId == null ? ipAddress : null,
+            VoteValue = 1,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        context.PostVotes.Add(vote);
+        post.VoteCount++;
+        await context.SaveChangesAsync();
+
+        return (true, "추천되었습니다.");
+    }
+
+    /// <summary>
+    /// 사용자가 게시글에 이미 투표했는지 확인
+    /// </summary>
+    public async Task<bool> HasVotedAsync(int postId)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var userId = _authService.GetCurrentUserId();
+        var ipAddress = GetClientIpAddress();
+
+        if (userId != null)
+        {
+            return await context.PostVotes
+                .AnyAsync(v => v.PostId == postId && v.UserId == userId);
+        }
+        else
+        {
+            return await context.PostVotes
+                .AnyAsync(v => v.PostId == postId && v.IpAddress == ipAddress && v.UserId == null);
+        }
+    }
+
+    private string? GetClientIpAddress()
+    {
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext == null)
+            return null;
+
+        // X-Forwarded-For 헤더 확인 (프록시/로드밸런서 뒤에 있는 경우)
+        var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(forwardedFor))
+        {
+            return forwardedFor.Split(',').FirstOrDefault()?.Trim();
+        }
+
+        return httpContext.Connection.RemoteIpAddress?.ToString();
     }
 
     public async Task<int> GetTotalPostCountAsync()

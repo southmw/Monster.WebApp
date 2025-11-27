@@ -74,6 +74,18 @@ namespace Monster.WebApp
 
             builder.Services.AddMudServices();
 
+            // Add MemoryCache for login attempt limiting
+            builder.Services.AddMemoryCache();
+
+            // Add Session for view count tracking
+            builder.Services.AddDistributedMemoryCache();
+            builder.Services.AddSession(options =>
+            {
+                options.IdleTimeout = TimeSpan.FromMinutes(30);
+                options.Cookie.HttpOnly = true;
+                options.Cookie.IsEssential = true;
+            });
+
             // Configure file upload size limits
             builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
             {
@@ -111,6 +123,8 @@ namespace Monster.WebApp
             app.UseHttpsRedirection();
 
             app.UseStaticFiles();
+
+            app.UseSession();
 
             app.UseAuthentication();
             app.UseAuthorization();

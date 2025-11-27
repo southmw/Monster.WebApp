@@ -1,24 +1,24 @@
-@page "/not-found"
-@layout MainLayout
+@page "/account/access-denied"
 @inject NavigationManager NavigationManager
 
-<PageTitle>페이지를 찾을 수 없습니다 - Monster.WebApp</PageTitle>
+<PageTitle>접근 거부 - Monster.WebApp</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
     <MudPaper Elevation="3" Class="auth-container">
         <div class="auth-header">
-            <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Warning" />
-            <MudText Typo="Typo.h4" Style="font-weight: 700; margin-top: 16px;">404</MudText>
-            <MudText Typo="Typo.h6" Class="mt-2">페이지를 찾을 수 없습니다</MudText>
+            <MudIcon Icon="@Icons.Material.Filled.Block" Size="Size.Large" Color="Color.Error" />
+            <MudText Typo="Typo.h4" Style="font-weight: 700; margin-top: 16px;">접근 권한이 없습니다</MudText>
             <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top: 8px;">
-                요청하신 페이지가 존재하지 않거나 이동되었을 수 있습니다.
+                이 페이지에 접근할 수 있는 권한이 없습니다.
             </MudText>
         </div>
 
         <MudDivider Class="my-4" />
 
-        <MudText Typo="Typo.body2" Align="Align.Center" Class="mb-4" Color="Color.Secondary">
-            찾으시는 페이지가 삭제되었거나 URL이 잘못되었을 수 있습니다.
+        <MudText Typo="Typo.body1" Align="Align.Center" Class="mb-4" Color="Color.Secondary">
+            필요한 권한이 없거나 로그인이 필요합니다.
+            <br />
+            문제가 계속되면 관리자에게 문의하세요.
         </MudText>
 
         <MudStack Row="true" Justify="Justify.Center" Spacing="2" Class="mt-4">
@@ -39,9 +39,8 @@
         <MudDivider Class="my-4" />
 
         <MudText Typo="Typo.body2" Align="Align.Center" Color="Color.Secondary">
-            도움이 필요하시면
-            <MudLink Href="/board" Color="Color.Primary">게시판</MudLink>
-            을 방문해보세요.
+            로그인이 필요하신가요?
+            <MudLink Href="/account/login" Color="Color.Primary">로그인</MudLink>
         </MudText>
     </MudPaper>
 </MudContainer>

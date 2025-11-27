@@ -212,28 +212,89 @@ public class CategoryAccessService
         return true;
     }
 
+    /// <summary>
+    /// 접근 가능한 카테고리 목록 조회 (N+1 쿼리 최적화)
+    /// </summary>
     public async Task<List<Category>> GetAccessibleCategoriesAsync(int? userId = null)
     {
         userId ??= _authService.GetCurrentUserId();
 
         await using var context = await _contextFactory.CreateDbContextAsync();
 
-        // Get all active categories
+        // 1. 모든 활성 카테고리와 접근 권한을 한 번에 로드
         var allCategories = await context.Categories
             .Where(c => c.IsActive)
+            .Include(c => c.CategoryAccesses)
             .OrderBy(c => c.DisplayOrder)
             .ToListAsync();
 
-        var accessibleCategories = new List<Category>();
+        // 2. 사용자 역할 정보를 한 번에 로드 (로그인한 경우)
+        List<int>? userRoleIds = null;
+        bool isAdmin = false;
 
-        foreach (var category in allCategories)
+        if (userId.HasValue)
         {
-            if (await CanAccessCategoryAsync(category.Id, userId))
+            userRoleIds = await context.UserRoles
+                .Where(ur => ur.UserId == userId.Value)
+                .Select(ur => ur.RoleId)
+                .ToListAsync();
+
+            // Admin 역할 확인
+            var adminRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == AppConstants.Roles.Admin);
+            if (adminRole != null && userRoleIds.Contains(adminRole.Id))
             {
-                accessibleCategories.Add(category);
+                isAdmin = true;
             }
         }
 
-        return accessibleCategories;
+        // 3. 메모리에서 필터링
+        return allCategories
+            .Where(c => CanAccessCategoryInMemory(c, userId, userRoleIds, isAdmin))
+            .ToList();
+    }
+
+    /// <summary>
+    /// 메모리에서 카테고리 접근 권한 체크 (DB 쿼리 없음)
+    /// </summary>
+    private bool CanAccessCategoryInMemory(
+        Category category,
+        int? userId,
+        List<int>? userRoleIds,
+        bool isAdmin)
+    {
+        // 비활성 카테고리
+        if (!category.IsActive)
+            return false;
+
+        // 공개 + 인증 불필요 → 모든 사용자 접근 가능
+        if (category.IsPublic && !category.RequireAuth)
+            return true;
+
+        // 인증 필요한데 로그인 안함
+        if (category.RequireAuth && userId == null)
+            return false;
+
+        // 관리자는 모든 카테고리 접근 가능
+        if (isAdmin)
+            return true;
+
+        // 공개 + 인증 필요 + 로그인됨 → 접근 가능
+        if (category.IsPublic && category.RequireAuth && userId != null)
+            return true;
+
+        // 특정 권한 체크 (비공개 카테고리)
+        if (userId != null && category.CategoryAccesses != null)
+        {
+            // 사용자별 접근 권한
+            if (category.CategoryAccesses.Any(ca => ca.UserId == userId))
+                return true;
+
+            // 역할별 접근 권한
+            if (userRoleIds != null && category.CategoryAccesses
+                .Any(ca => ca.RoleId != null && userRoleIds.Contains(ca.RoleId.Value)))
+                return true;
+        }
+
+        return false;
     }
 }

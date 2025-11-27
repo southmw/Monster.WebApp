@@ -213,6 +213,26 @@ public class UserService
         return true;
     }
 
+    /// <summary>
+    /// 관리자 전용: 사용자 비밀번호 강제 리셋
+    /// </summary>
+    public async Task<bool> ResetPasswordAsync(int userId, string newPassword)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var user = await context.Users.FindAsync(userId);
+        if (user == null)
+        {
+            return false;
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await context.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<UserStatistics> GetUserStatisticsAsync(int userId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();

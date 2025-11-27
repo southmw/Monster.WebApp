@@ -379,9 +379,15 @@
 
     private async Task VotePost()
     {
-        if (await PostService.VotePostAsync(PostId))
+        var (success, message) = await PostService.VotePostAsync(PostId);
+        if (success)
         {
             await LoadPostAsync();
+            Snackbar.Add("추천되었습니다.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(message, Severity.Warning);
         }
     }
 

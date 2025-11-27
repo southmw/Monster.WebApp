@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Monster.WebApp.Data;
 using Monster.WebApp.Models.Auth;
 using Monster.WebApp.Models.Board;
@@ -13,11 +14,20 @@ public class AuthService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IMemoryCache _cache;
 
-    public AuthService(IDbContextFactory<ApplicationDbContext> contextFactory, IHttpContextAccessor httpContextAccessor)
+    // 로그인 시도 제한 설정
+    private const int MaxLoginAttempts = 5;
+    private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
+
+    public AuthService(
+        IDbContextFactory<ApplicationDbContext> contextFactory,
+        IHttpContextAccessor httpContextAccessor,
+        IMemoryCache cache)
     {
         _contextFactory = contextFactory;
         _httpContextAccessor = httpContextAccessor;
+        _cache = cache;
     }
 
     public async Task<User?> RegisterAsync(string username, string email, string password, string displayName)
@@ -59,8 +69,25 @@ public class AuthService
         return user;
     }
 
-    public async Task<User?> LoginAsync(string username, string password)
+    /// <summary>
+    /// 로그인 처리 (시도 제한 포함)
+    /// </summary>
+    public async Task<(User? User, string? ErrorMessage)> LoginAsync(string username, string password)
     {
+        var clientIp = GetClientIpAddress();
+        var lockoutKey = $"login_lockout_{username}_{clientIp}";
+        var attemptsKey = $"login_attempts_{username}_{clientIp}";
+
+        // 잠금 상태 확인
+        if (_cache.TryGetValue(lockoutKey, out DateTime lockoutEnd))
+        {
+            var remaining = lockoutEnd - DateTime.UtcNow;
+            if (remaining.TotalSeconds > 0)
+            {
+                return (null, $"로그인이 일시적으로 차단되었습니다. {Math.Ceiling(remaining.TotalMinutes)}분 후에 다시 시도해주세요.");
+            }
+        }
+
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         var user = await context.Users
@@ -70,8 +97,31 @@ public class AuthService
 
         if (user == null || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
         {
-            return null;
+            // 실패 횟수 증가
+            var attempts = _cache.GetOrCreate(attemptsKey, entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = LockoutDuration;
+                return 0;
+            });
+
+            attempts++;
+            _cache.Set(attemptsKey, attempts, LockoutDuration);
+
+            if (attempts >= MaxLoginAttempts)
+            {
+                // 잠금 설정
+                _cache.Set(lockoutKey, DateTime.UtcNow.Add(LockoutDuration), LockoutDuration);
+                _cache.Remove(attemptsKey);
+                return (null, $"로그인 시도 횟수를 초과했습니다. {LockoutDuration.TotalMinutes}분 후에 다시 시도해주세요.");
+            }
+
+            var remainingAttempts = MaxLoginAttempts - attempts;
+            return (null, $"사용자명 또는 비밀번호가 올바르지 않습니다. (남은 시도: {remainingAttempts}회)");
         }
+
+        // 로그인 성공 - 시도 횟수 초기화
+        _cache.Remove(attemptsKey);
+        _cache.Remove(lockoutKey);
 
         // Create claims
         var claims = new List<Claim>
@@ -104,7 +154,22 @@ public class AuthService
                 authProperties);
         }
 
-        return user;
+        return (user, null);
+    }
+
+    private string? GetClientIpAddress()
+    {
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext == null)
+            return "unknown";
+
+        var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(forwardedFor))
+        {
+            return forwardedFor.Split(',').FirstOrDefault()?.Trim();
+        }
+
+        return httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     }
 
     public async Task LogoutAsync()

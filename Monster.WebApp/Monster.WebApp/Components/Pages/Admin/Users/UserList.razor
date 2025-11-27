@@ -84,18 +84,30 @@
                         </MudTd>
                         <MudTd DataLabel="작업">
                             <MudStack Row="true" Spacing="1">
-                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                                             Color="Color.Info"
-                                             Size="Size.Small"
-                                             OnClick="@(() => EditUserAsync(context))" />
-                                <MudIconButton Icon="@Icons.Material.Filled.Security"
-                                             Color="Color.Secondary"
-                                             Size="Size.Small"
-                                             OnClick="@(() => ManageRolesAsync(context))" />
-                                <MudIconButton Icon="@(context.IsActive ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
-                                             Color="@(context.IsActive ? Color.Warning : Color.Success)"
-                                             Size="Size.Small"
-                                             OnClick="@(() => ToggleUserStatusAsync(context))" />
+                                <MudTooltip Text="사용자 정보 수정">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                 Color="Color.Info"
+                                                 Size="Size.Small"
+                                                 OnClick="@(() => EditUserAsync(context))" />
+                                </MudTooltip>
+                                <MudTooltip Text="역할 관리">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Security"
+                                                 Color="Color.Secondary"
+                                                 Size="Size.Small"
+                                                 OnClick="@(() => ManageRolesAsync(context))" />
+                                </MudTooltip>
+                                <MudTooltip Text="비밀번호 초기화">
+                                    <MudIconButton Icon="@Icons.Material.Filled.LockReset"
+                                                 Color="Color.Primary"
+                                                 Size="Size.Small"
+                                                 OnClick="@(() => ResetPasswordAsync(context))" />
+                                </MudTooltip>
+                                <MudTooltip Text="@(context.IsActive ? "비활성화" : "활성화")">
+                                    <MudIconButton Icon="@(context.IsActive ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
+                                                 Color="@(context.IsActive ? Color.Warning : Color.Success)"
+                                                 Size="Size.Small"
+                                                 OnClick="@(() => ToggleUserStatusAsync(context))" />
+                                </MudTooltip>
                             </MudStack>
                         </MudTd>
                     </RowTemplate>
@@ -190,6 +202,23 @@
         {
             await LoadUsersAsync();
             Snackbar.Add("역할이 변경되었습니다.", Severity.Success);
+        }
+    }
+
+    private async Task ResetPasswordAsync(User user)
+    {
+        var parameters = new DialogParameters<ResetPasswordDialog>
+        {
+            { x => x.UserId, user.Id },
+            { x => x.Username, user.Username }
+        };
+
+        var dialog = await DialogService.ShowAsync<ResetPasswordDialog>("비밀번호 초기화", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            Snackbar.Add($"{user.Username}의 비밀번호가 초기화되었습니다.", Severity.Success);
         }
     }
 

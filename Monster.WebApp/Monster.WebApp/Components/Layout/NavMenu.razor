@@ -11,6 +11,9 @@
 
     @if (_categories != null && _categories.Any())
     {
+        <MudText Typo="Typo.subtitle2" Color="Color.Inherit" Class="px-4 mt-6 mb-2" Style="color: var(--mud-palette-drawer-text); opacity: 0.5;">BOARD</MudText>
+
+
         @foreach (var category in _categories)
         {
             <MudNavLink Href="@($"/board/{category.UrlSlug}")" Match="NavLinkMatch.Prefix" Icon="@GetCategoryIcon(category.UrlSlug)" IconColor="Color.Inherit">@category.Name</MudNavLink>
