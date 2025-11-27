@@ -106,9 +106,16 @@ else
                     <MudTh Style="font-weight: 600; text-align: center;">추천</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd DataLabel="제목">
+                    <MudTd DataLabel="제목" Style="@(context.IsPinned ? "background-color: rgba(102, 126, 234, 0.05);" : "")">
+                        @if (context.IsPinned)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                                     Style="margin-right: 8px; font-size: 11px; height: 20px;">
+                                공지
+                            </MudChip>
+                        }
                         <MudLink Href="@($"/board/{CategoryUrl}/{context.Id}")"
-                                 Style="font-weight: 500; color: #1f2937;">
+                                 Style="@(context.IsPinned ? "font-weight: 600; color: #667eea;" : "font-weight: 500; color: #1f2937;")">
                             @context.Title
                         </MudLink>
                     </MudTd>

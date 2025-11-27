@@ -246,4 +246,15 @@ public class AuthService
         }
         return httpContext.User.IsInRole(AppConstants.Roles.Admin);
     }
+
+    public bool IsSubAdminOrHigher()
+    {
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext?.User?.Identity?.IsAuthenticated != true)
+        {
+            return false;
+        }
+        return httpContext.User.IsInRole(AppConstants.Roles.Admin) ||
+               httpContext.User.IsInRole(AppConstants.Roles.SubAdmin);
+    }
 }

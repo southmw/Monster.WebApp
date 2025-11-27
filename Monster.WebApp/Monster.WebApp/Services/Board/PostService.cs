@@ -41,7 +41,9 @@ public class PostService
         var totalCount = await query.CountAsync();
 
         var posts = await query
-            .OrderByDescending(p => p.CreatedAt)
+            .OrderByDescending(p => p.IsPinned)
+            .ThenByDescending(p => p.PinnedAt)
+            .ThenByDescending(p => p.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
@@ -329,5 +331,51 @@ public class PostService
             .ThenByDescending(p => p.VoteCount)
             .Take(count)
             .ToListAsync();
+    }
+
+    /// <summary>
+    /// 게시글 공지 고정/해제 (Admin, SubAdmin 권한 필요)
+    /// </summary>
+    public async Task<(bool Success, string Message)> TogglePinAsync(int postId)
+    {
+        if (!_authService.IsSubAdminOrHigher())
+        {
+            return (false, "공지 설정 권한이 없습니다.");
+        }
+
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var post = await context.Posts.FindAsync(postId);
+        if (post == null || post.IsDeleted)
+        {
+            return (false, "게시글을 찾을 수 없습니다.");
+        }
+
+        if (post.IsPinned)
+        {
+            // 고정 해제
+            post.IsPinned = false;
+            post.PinnedAt = null;
+            await context.SaveChangesAsync();
+            return (true, "공지가 해제되었습니다.");
+        }
+        else
+        {
+            // 고정 설정
+            post.IsPinned = true;
+            post.PinnedAt = DateTime.UtcNow;
+            await context.SaveChangesAsync();
+            return (true, "공지로 설정되었습니다.");
+        }
+    }
+
+    /// <summary>
+    /// 게시글이 공지인지 확인
+    /// </summary>
+    public async Task<bool> IsPinnedAsync(int postId)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var post = await context.Posts.FindAsync(postId);
+        return post?.IsPinned ?? false;
     }
 }

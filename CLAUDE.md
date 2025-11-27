@@ -196,3 +196,10 @@ Serilog를 사용하여 콘솔 및 파일 로깅:
 
 ### 코드 정리
 - `Settings.razor` 중복 코드 제거 - 기존 관리 페이지로 이동하는 카드 UI로 변경
+
+### 게시글 공지 고정 기능 (2025-11-27)
+- Post 모델에 `IsPinned`, `PinnedAt` 필드 추가
+- 공지 게시글은 목록 상단에 고정 표시 (보라색 배경 + "공지" 칩)
+- Admin/SubAdmin 권한으로 공지 등록/해제 가능 (`AuthService.IsSubAdminOrHigher()`)
+- `PostService.TogglePinAsync()` 메서드로 공지 상태 토글
+- 정렬 순서: 공지글(PinnedAt 최신순) → 일반글(CreatedAt 최신순)

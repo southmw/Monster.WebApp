@@ -35,6 +35,10 @@ public class Post
 
     public bool IsDeleted { get; set; } = false;
 
+    public bool IsPinned { get; set; } = false;
+
+    public DateTime? PinnedAt { get; set; }
+
     // Navigation properties
     public Category Category { get; set; } = null!;
     public User? User { get; set; }

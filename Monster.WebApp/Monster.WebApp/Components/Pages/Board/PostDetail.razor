@@ -20,7 +20,15 @@
     {
         <!-- 게시글 본문 -->
         <div class="post-content-section">
-            <MudText Typo="Typo.h4" Style="font-weight: 700; margin-bottom: 16px;">@post.Title</MudText>
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                @if (post.IsPinned)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled">
+                        공지
+                    </MudChip>
+                }
+                <MudText Typo="Typo.h4" Style="font-weight: 700;">@post.Title</MudText>
+            </div>
             <div class="post-meta">
                 <MudText Typo="Typo.body2" Color="Color.Secondary">
                     <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small" Style="vertical-align: middle;" />
@@ -65,6 +73,15 @@
                     <MudButton Color="Color.Info" OnClick="EditPost" StartIcon="@Icons.Material.Outlined.Edit">수정</MudButton>
                     <MudButton Color="Color.Error" OnClick="DeletePost" StartIcon="@Icons.Material.Outlined.Delete">삭제</MudButton>
                 </MudButtonGroup>
+            }
+            @if (_isSubAdminOrHigher)
+            {
+                <MudButton Variant="Variant.Outlined"
+                           Color="@(post.IsPinned ? Color.Warning : Color.Primary)"
+                           OnClick="TogglePin"
+                           StartIcon="@Icons.Material.Outlined.PushPin">
+                    @(post.IsPinned ? "공지 해제" : "공지 등록")
+                </MudButton>
             }
         </MudStack>
 
@@ -248,6 +265,7 @@
     private Post? post;
     private int? _currentUserId;
     private bool _isAdmin = false;
+    private bool _isSubAdminOrHigher = false;
     private bool IsLoggedIn => _currentUserId != null;
 
     // Comment fields
@@ -272,6 +290,7 @@
     {
         _currentUserId = AuthService.GetCurrentUserId();
         _isAdmin = AuthService.IsAdmin();
+        _isSubAdminOrHigher = AuthService.IsSubAdminOrHigher();
         await LoadPostAsync();
     }
 
@@ -605,6 +624,20 @@
             {
                 Snackbar.Add("댓글 삭제에 실패했습니다. 비밀번호를 확인해주세요.", Severity.Error);
             }
+        }
+    }
+
+    private async Task TogglePin()
+    {
+        var (success, message) = await PostService.TogglePinAsync(PostId);
+        if (success)
+        {
+            await LoadPostAsync();
+            Snackbar.Add(message, Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(message, Severity.Error);
         }
     }
 }
