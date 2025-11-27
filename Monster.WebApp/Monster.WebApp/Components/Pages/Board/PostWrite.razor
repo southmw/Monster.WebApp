@@ -69,6 +69,13 @@
                               Placeholder="내용을 입력하세요..." Class="compact-input" Margin="Margin.Dense" />
             </div>
 
+            @if (_isSubAdminOrHigher)
+            {
+                <div class="form-section">
+                    <MudCheckBox @bind-Value="isPinned" Label="공지로 등록" Color="Color.Primary" />
+                </div>
+            }
+
             <MudButtonGroup Size="Size.Medium" Style="margin-top: 16px;">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary"
                            OnClick="SubmitPost" Disabled="isSubmitting"
@@ -97,6 +104,8 @@
     private bool isSubmitting = false;
     private bool canWrite = false;
     private bool isAuthenticated = false;
+    private bool isPinned = false;
+    private bool _isSubAdminOrHigher = false;
     private User? currentUser;
 
     protected override async Task OnInitializedAsync()
@@ -114,6 +123,7 @@
 
         // Get current user info
         isAuthenticated = AuthService.IsAuthenticated();
+        _isSubAdminOrHigher = AuthService.IsSubAdminOrHigher();
         if (isAuthenticated)
         {
             currentUser = await AuthService.GetCurrentUserAsync();
@@ -163,7 +173,9 @@
                 CategoryId = category.Id,
                 Title = title,
                 Content = content,
-                AuthorNickname = authorNickname
+                AuthorNickname = authorNickname,
+                IsPinned = _isSubAdminOrHigher && isPinned,
+                PinnedAt = (_isSubAdminOrHigher && isPinned) ? DateTime.UtcNow : null
             };
 
             // 로그인 사용자는 password를 null로 전달

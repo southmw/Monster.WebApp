@@ -294,6 +294,25 @@
         await LoadPostAsync();
     }
 
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Prerendering 후 클라이언트에서 권한 재확인
+            var currentUserId = AuthService.GetCurrentUserId();
+            var isAdmin = AuthService.IsAdmin();
+            var isSubAdminOrHigher = AuthService.IsSubAdminOrHigher();
+
+            if (_currentUserId != currentUserId || _isAdmin != isAdmin || _isSubAdminOrHigher != isSubAdminOrHigher)
+            {
+                _currentUserId = currentUserId;
+                _isAdmin = isAdmin;
+                _isSubAdminOrHigher = isSubAdminOrHigher;
+                StateHasChanged();
+            }
+        }
+    }
+
     private bool CanEditOrDelete()
     {
         if (post == null) return false;
