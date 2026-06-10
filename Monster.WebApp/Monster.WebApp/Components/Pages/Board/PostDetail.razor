@@ -2,6 +2,7 @@
 @using Monster.WebApp.Services
 @using Monster.WebApp.Services.Auth
 @using Monster.WebApp.Models
+@using Monster.WebApp.Shared
 @inject CategoryService CategoryService
 @inject PostService PostService
 @inject CommentService CommentService
@@ -45,7 +46,7 @@
                 </MudText>
             </div>
             <div class="post-html-content" style="line-height: 1.8; font-size: 15px;">
-                @((MarkupString)post.Content)
+                @((MarkupString)HtmlContentHelper.ToSafeHtml(post.Content))
             </div>
 
             @if (post.Attachments.Any())
@@ -159,7 +160,7 @@
                     else
                     {
                         <div class="comment-html-content" style="margin-top: 12px; line-height: 1.6;">
-                            @((MarkupString)comment.Content)
+                            @((MarkupString)HtmlContentHelper.ToSafeHtml(comment.Content))
                         </div>
                     }
 
@@ -244,7 +245,7 @@
                             else
                             {
                                 <div class="comment-html-content" style="margin-top: 8px; line-height: 1.6; font-size: 14px;">
-                                    @((MarkupString)reply.Content)
+                                    @((MarkupString)HtmlContentHelper.ToSafeHtml(reply.Content))
                                 </div>
                             }
                         </div>

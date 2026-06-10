@@ -30,6 +30,7 @@ public class PostService
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         var query = context.Posts
+            .AsNoTracking()
             .Include(p => p.Category)
             .Where(p => p.CategoryId == categoryId && !p.IsDeleted);
 
@@ -55,6 +56,7 @@ public class PostService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Posts
+            .AsNoTracking()
             .Include(p => p.Category)
             .Include(p => p.Comments.Where(c => !c.IsDeleted))
             .Include(p => p.Attachments)
@@ -98,33 +100,8 @@ public class PostService
         if (post == null || post.IsDeleted)
             return false;
 
-        // 관리자는 모든 게시글 수정 가능
-        if (_authService.IsAdmin())
-        {
-            post.Title = updatedPost.Title;
-            post.Content = updatedPost.Content;
-            post.UpdatedAt = DateTime.UtcNow;
-            await context.SaveChangesAsync();
-            return true;
-        }
-
-        // Check authorization
-        var userId = _authService.GetCurrentUserId();
-        if (post.UserId != null)
-        {
-            // Authenticated post - must be owner
-            if (userId != post.UserId)
-                return false;
-        }
-        else
-        {
-            // Anonymous post - verify password
-            if (string.IsNullOrWhiteSpace(password) || post.AuthorPassword == null)
-                return false;
-
-            if (!BCrypt.Net.BCrypt.Verify(password, post.AuthorPassword))
-                return false;
-        }
+        if (!_authService.CanModifyContent(post.UserId, post.AuthorPassword, password))
+            return false;
 
         post.Title = updatedPost.Title;
         post.Content = updatedPost.Content;
@@ -142,31 +119,8 @@ public class PostService
         if (post == null || post.IsDeleted)
             return false;
 
-        // 관리자는 모든 게시글 삭제 가능
-        if (_authService.IsAdmin())
-        {
-            post.IsDeleted = true;
-            await context.SaveChangesAsync();
-            return true;
-        }
-
-        // Check authorization
-        var userId = _authService.GetCurrentUserId();
-        if (post.UserId != null)
-        {
-            // Authenticated post - must be owner
-            if (userId != post.UserId)
-                return false;
-        }
-        else
-        {
-            // Anonymous post - verify password
-            if (string.IsNullOrWhiteSpace(password) || post.AuthorPassword == null)
-                return false;
-
-            if (!BCrypt.Net.BCrypt.Verify(password, post.AuthorPassword))
-                return false;
-        }
+        if (!_authService.CanModifyContent(post.UserId, post.AuthorPassword, password))
+            return false;
 
         post.IsDeleted = true;
         await context.SaveChangesAsync();
@@ -314,6 +268,7 @@ public class PostService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Posts
+            .AsNoTracking()
             .Include(p => p.Category)
             .Where(p => !p.IsDeleted && p.Category.IsActive)
             .OrderByDescending(p => p.CreatedAt)
@@ -325,6 +280,7 @@ public class PostService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Posts
+            .AsNoTracking()
             .Include(p => p.Category)
             .Where(p => !p.IsDeleted && p.Category.IsActive)
             .OrderByDescending(p => p.ViewCount)

@@ -8,17 +8,23 @@ public class CategoryService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly CategoryAccessService _categoryAccessService;
+    private readonly ILogger<CategoryService> _logger;
 
-    public CategoryService(IDbContextFactory<ApplicationDbContext> contextFactory, CategoryAccessService categoryAccessService)
+    public CategoryService(
+        IDbContextFactory<ApplicationDbContext> contextFactory,
+        CategoryAccessService categoryAccessService,
+        ILogger<CategoryService> logger)
     {
         _contextFactory = contextFactory;
         _categoryAccessService = categoryAccessService;
+        _logger = logger;
     }
 
     public async Task<List<Category>> GetAllActiveCategoriesAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Categories
+            .AsNoTracking()
             .Where(c => c.IsActive)
             .OrderBy(c => c.DisplayOrder)
             .ToListAsync();
@@ -28,6 +34,7 @@ public class CategoryService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Categories
+            .AsNoTracking()
             .Include(c => c.Posts)
             .OrderBy(c => c.DisplayOrder)
             .ToListAsync();
@@ -48,6 +55,7 @@ public class CategoryService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Categories
+            .AsNoTracking()
             .FirstOrDefaultAsync(c => c.UrlSlug == urlSlug && c.IsActive);
     }
 
@@ -70,8 +78,9 @@ public class CategoryService
             await context.SaveChangesAsync();
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "카테고리 생성 실패: {Name} ({UrlSlug})", name, urlSlug);
             return false;
         }
     }
@@ -93,8 +102,9 @@ public class CategoryService
             await context.SaveChangesAsync();
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "카테고리 수정 실패: Id {Id}", id);
             return false;
         }
     }
@@ -115,8 +125,9 @@ public class CategoryService
             await context.SaveChangesAsync();
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "카테고리 삭제 실패: Id {Id}", id);
             return false;
         }
     }

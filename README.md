@@ -2,7 +2,7 @@
 
 .NET 8.0 기반의 Blazor 웹 애플리케이션입니다. Interactive Server/WebAssembly 하이브리드 렌더링 모드를 사용하여 게시판 시스템과 사용자 관리 기능을 제공합니다.
 
-**최근 업데이트**: 2025-11-27
+**최근 업데이트**: 2026-06-10
 
 ## 주요 기능
 
@@ -24,8 +24,10 @@
 - 역할 기반 접근 제어 (Admin, SubAdmin, User)
 - 사용자 관리 (활성화/비활성화)
 - 카테고리별 접근 권한 설정
-- **로그인 보안** - 5회 실패 시 15분 잠금
+- **로그인 보안** - 5회 실패 시 15분 잠금 (IP + 사용자명 조합)
 - **비밀번호 정책** - 최소 8자, 대/소문자/숫자/특수문자 필수
+- **쿠키 보안** - HttpOnly, SameSite=Lax, 프로덕션 HTTPS 전용(Secure)
+- **XSS 방어** - 게시글/댓글 본문 출력 시 HTML 인코딩 처리 (저장형 XSS 차단)
 
 ### 관리자 기능
 - 사용자 관리 (생성, 수정, 역할 할당, **비밀번호 리셋**)
@@ -51,6 +53,7 @@
 | SQL Server | 2022 | 데이터베이스 |
 | BCrypt.Net-Next | 4.0.3 | 비밀번호 해싱 |
 | Serilog | 9.0.0 | 로깅 |
+| xUnit | - | 단위 테스트 (Monster.WebApp.Tests) |
 
 ## 시작하기
 
@@ -75,15 +78,16 @@
      "ConnectionStrings": {
        "DefaultConnection": "Server=YOUR_SERVER;Database=YOUR_DATABASE;User Id=YOUR_USER;Password=YOUR_PASSWORD;Encrypt=False;MultipleActiveResultSets=True;"
      },
-     "Logging": {
-       "LogLevel": {
-         "Default": "Information",
-         "Microsoft.AspNetCore": "Warning"
-       }
+     "AdminSeed": {
+       "Username": "admin",
+       "Email": "admin@example.com",
+       "Password": "강력한_초기_비밀번호"
      },
      "AllowedHosts": "*"
    }
    ```
+
+   > `AdminSeed`는 최초 실행 시 생성되는 관리자 계정 정보입니다. 미설정 시 기본값으로 생성되며, 비밀번호는 로그에 기록되지 않습니다.
 
 3. **NuGet 패키지 복원**
    ```bash
@@ -94,6 +98,7 @@
    ```bash
    dotnet ef database update --project Monster.WebApp/Monster.WebApp/Monster.WebApp.csproj
    ```
+   > 개발 환경에서는 앱 시작 시 마이그레이션이 자동 적용되므로 이 단계를 건너뛸 수 있습니다. 프로덕션 배포 시에는 위 명령을 실행하세요.
 
 5. **애플리케이션 실행**
    ```bash
@@ -106,15 +111,15 @@
 
 ### 초기 관리자 계정
 
-애플리케이션 최초 실행 시 자동으로 생성됩니다:
+애플리케이션 최초 실행 시 자동으로 생성됩니다. 계정 정보는 `appsettings.json`의 `AdminSeed` 설정에서 지정하며, 미설정 시 아래 기본값이 사용됩니다:
 
-| 항목 | 값 |
-|------|------|
-| Username | admin |
-| Email | admin@southmw.com |
-| Password | Admin@123! |
+| 항목 | 기본값 | 설정 키 |
+|------|------|------|
+| Username | admin | `AdminSeed:Username` |
+| Email | admin@southmw.com | `AdminSeed:Email` |
+| Password | Admin@123! | `AdminSeed:Password` |
 
-> **보안 주의**: 프로덕션 환경에서는 초기 비밀번호를 즉시 변경하세요.
+> **보안 주의**: 프로덕션 환경에서는 `AdminSeed:Password`를 강력한 값으로 설정하거나, 최초 로그인 후 즉시 변경하세요.
 
 ## 프로젝트 구조
 
@@ -135,8 +140,9 @@ Monster.WebApp/
 │   ├── Services/                    # 비즈니스 로직
 │   │   ├── Auth/                    # AuthService, UserService, RoleService
 │   │   └── Board/                   # CategoryService, PostService, CommentService
-│   └── Shared/                      # CustomTheme, AppConstants, PasswordValidator
-└── Monster.WebApp.Client/           # 클라이언트 프로젝트 (WebAssembly)
+│   └── Shared/                      # CustomTheme, AppConstants, PasswordValidator, HtmlContentHelper
+├── Monster.WebApp.Client/           # 클라이언트 프로젝트 (WebAssembly)
+└── Monster.WebApp.Tests/            # xUnit 단위 테스트
 ```
 
 ## 개발 명령어
@@ -144,6 +150,9 @@ Monster.WebApp/
 ```bash
 # 솔루션 빌드
 dotnet build Monster.WebApp.slnx
+
+# 테스트 실행
+dotnet test Monster.WebApp.slnx
 
 # Clean 빌드
 dotnet clean Monster.WebApp.slnx
@@ -199,8 +208,21 @@ Get-Process -Name dotnet -ErrorAction SilentlyContinue | Stop-Process -Force
 - BCrypt.Net-Next 4.0.3 사용
 - 사용자 계정, 게시글, 댓글 비밀번호 해싱
 
+### XSS 방어
+- 게시글/댓글 본문은 평문 입력으로, 출력 시 `HtmlContentHelper.ToSafeHtml()`로 HTML 인코딩 후 렌더링 (저장형 XSS 차단)
+
+### 쿠키 보안
+- 인증 쿠키: HttpOnly, SameSite=Lax, 프로덕션 환경 Secure(HTTPS 전용)
+
+### 파일 업로드 보안
+- 업로드 API는 인증 필수(`[Authorize]`), 확장자 화이트리스트 + 파일 시그니처(매직넘버) 검증
+
+### 로그 보안
+- EF Core SQL/파라미터 로깅을 Warning 레벨로 억제하여 민감정보 노출 방지
+
 ### 설정 파일 보안
 - `appsettings.json`은 Git에 추적되지 않음 (민감한 DB 자격증명 포함)
+- `wwwroot/uploads/`(사용자 업로드물)도 Git에 추적되지 않음
 
 ### 권한 정책
 | 정책명 | 설명 |
@@ -213,7 +235,8 @@ Get-Process -Name dotnet -ErrorAction SilentlyContinue | Stop-Process -Force
 
 Serilog를 사용하여 로깅 구현:
 - **콘솔**: 실시간 로그 출력
-- **파일**: `logs/log-{날짜}.txt` (일별 롤링)
+- **파일**: `logs/log-{날짜}.txt` (일별 롤링, 최근 31일 보관)
+- **최소 레벨**: 기본 Information, 프레임워크/EF Core는 Warning (민감정보 노출 방지)
 
 ## 라이선스
 

@@ -9,6 +9,7 @@ using Monster.WebApp.Services.Board;
 using Monster.WebApp.Shared;
 using MudBlazor.Services;
 using Serilog;
+using System.Diagnostics;
 
 namespace Monster.WebApp
 {
@@ -20,14 +21,24 @@ namespace Monster.WebApp
 
             // Configure Serilog
             Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Information()
+                // 프레임워크 잡음 억제 + EF Core의 SQL/파라미터 로깅 차단(민감정보 노출 방지)
+                .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
+                .MinimumLevel.Override("Microsoft.AspNetCore", Serilog.Events.LogEventLevel.Warning)
+                .MinimumLevel.Override("Microsoft.EntityFrameworkCore", Serilog.Events.LogEventLevel.Warning)
+                .Enrich.FromLogContext()
                 .WriteTo.Console()
-                .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day)
+                .WriteTo.File(
+                    "logs/log-.txt",
+                    rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 31) // 최근 31일치만 보관 (디스크 누적 방지)
                 .CreateLogger();
 
             builder.Host.UseSerilog();
 
             // Add DbContext with Factory for Blazor Server concurrency support
             var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+            Log.Debug($"ConnectionString: {connectionString}");
             builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
                 options.UseSqlServer(connectionString));
             // Also register DbContext for backward compatibility
@@ -53,6 +64,14 @@ namespace Monster.WebApp
                     options.AccessDeniedPath = "/account/access-denied";
                     options.ExpireTimeSpan = TimeSpan.FromDays(7);
                     options.SlidingExpiration = true;
+
+                    // 쿠키 보안 강화
+                    options.Cookie.HttpOnly = true; // JS 접근 차단 (XSS 시 쿠키 탈취 방어)
+                    options.Cookie.SameSite = SameSiteMode.Lax; // CSRF 완화 (로그인 폼 호환 위해 Lax)
+                    // 개발(http)에서는 SameAsRequest, 프로덕션(https)에서는 Always 강제
+                    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+                        ? CookieSecurePolicy.SameAsRequest
+                        : CookieSecurePolicy.Always;
                 });
 
             builder.Services.AddAuthorization(options =>
@@ -138,10 +157,34 @@ namespace Monster.WebApp
                 .AddInteractiveWebAssemblyRenderMode()
                 .AddAdditionalAssemblies(typeof(Client._Imports).Assembly);
 
+            // 개발 환경에서는 시작 시 마이그레이션 자동 적용 (프로덕션은 배포 파이프라인에서 수행)
+            await ApplyMigrationsAsync(app);
+
             // Initialize default admin account
             await InitializeDefaultAdminAsync(app);
 
             app.Run();
+        }
+
+        private static async Task ApplyMigrationsAsync(WebApplication app)
+        {
+            // 개발 환경에서만 자동 적용. 프로덕션은 `dotnet ef database update`를 배포 단계에서 실행.
+            if (!app.Environment.IsDevelopment())
+                return;
+
+            using var scope = app.Services.CreateScope();
+            var services = scope.ServiceProvider;
+            var logger = services.GetRequiredService<ILogger<Program>>();
+            try
+            {
+                var context = services.GetRequiredService<ApplicationDbContext>();
+                await context.Database.MigrateAsync();
+                logger.LogInformation("데이터베이스 마이그레이션이 적용되었습니다.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "데이터베이스 마이그레이션 적용 실패");
+            }
         }
 
         private static async Task InitializeDefaultAdminAsync(WebApplication app)
@@ -155,16 +198,28 @@ namespace Monster.WebApp
                 var context = services.GetRequiredService<ApplicationDbContext>();
                 var authService = services.GetRequiredService<AuthService>();
                 var roleService = services.GetRequiredService<RoleService>();
+                var configuration = services.GetRequiredService<IConfiguration>();
+
+                // 관리자 시드 정보는 설정(AdminSeed) 또는 환경변수에서 읽음 — 하드코딩 제거
+                var adminUsername = configuration["AdminSeed:Username"] ?? "admin";
+                var adminEmail = configuration["AdminSeed:Email"] ?? "admin@southmw.com";
+                var adminPassword = configuration["AdminSeed:Password"];
+                var usingFallbackPassword = string.IsNullOrWhiteSpace(adminPassword);
+                if (usingFallbackPassword)
+                {
+                    // 설정 미지정 시 첫 부팅용 기본값 (프로덕션에서는 반드시 설정/변경 필요)
+                    adminPassword = "Admin@123!";
+                }
 
                 // Check if admin user already exists
-                var adminUser = await context.Users.FirstOrDefaultAsync(u => u.Username == "admin");
+                var adminUser = await context.Users.FirstOrDefaultAsync(u => u.Username == adminUsername);
                 if (adminUser == null)
                 {
                     // Create default admin account
                     var newUser = await authService.RegisterAsync(
-                        username: "admin",
-                        email: "admin@southmw.com",
-                        password: "Admin@123!",
+                        username: adminUsername,
+                        email: adminEmail,
+                        password: adminPassword!,
                         displayName: "관리자"
                     );
 
@@ -175,7 +230,12 @@ namespace Monster.WebApp
                         if (adminRole != null)
                         {
                             await roleService.AssignRoleAsync(newUser.Id, adminRole.Id);
-                            logger.LogInformation("기본 관리자 계정이 생성되었습니다. (Username: admin, Password: Admin@123!)");
+                            // 비밀번호는 로그에 기록하지 않음
+                            logger.LogInformation("기본 관리자 계정이 생성되었습니다. (Username: {Username})", adminUsername);
+                            if (usingFallbackPassword)
+                            {
+                                logger.LogWarning("관리자 비밀번호가 설정(AdminSeed:Password)되지 않아 기본값으로 생성되었습니다. 프로덕션에서는 즉시 변경하세요.");
+                            }
                         }
                     }
                 }

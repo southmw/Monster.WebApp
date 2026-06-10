@@ -257,4 +257,30 @@ public class AuthService
         return httpContext.User.IsInRole(AppConstants.Roles.Admin) ||
                httpContext.User.IsInRole(AppConstants.Roles.SubAdmin);
     }
+
+    /// <summary>
+    /// 게시글/댓글 수정·삭제 권한을 검증한다.
+    /// - 관리자: 항상 허용
+    /// - 로그인 사용자 작성물(<paramref name="ownerUserId"/> != null): 본인만 허용
+    /// - 익명 작성물: 작성 시 비밀번호(<paramref name="providedPassword"/>)가 해시와 일치할 때만 허용
+    /// </summary>
+    public bool CanModifyContent(int? ownerUserId, string? authorPasswordHash, string? providedPassword)
+    {
+        // 관리자는 모든 콘텐츠 수정/삭제 가능
+        if (IsAdmin())
+            return true;
+
+        if (ownerUserId != null)
+        {
+            // 로그인 사용자 작성물 - 본인만
+            var currentUserId = GetCurrentUserId();
+            return currentUserId != null && currentUserId == ownerUserId;
+        }
+
+        // 익명 작성물 - 비밀번호 검증
+        if (string.IsNullOrWhiteSpace(providedPassword) || string.IsNullOrWhiteSpace(authorPasswordHash))
+            return false;
+
+        return BCrypt.Net.BCrypt.Verify(providedPassword, authorPasswordHash);
+    }
 }

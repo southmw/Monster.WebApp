@@ -420,3 +420,8 @@ login_test.json
 .env
 .env.local
 .env.*.local
+
+# 사용자 업로드 파일 (런타임 생성물 - 저장소에 포함하지 않음)
+# 폴더 구조 유지를 위해 .gitkeep만 예외로 추적 (디렉토리 내용 무시: /*)
+Monster.WebApp/Monster.WebApp/wwwroot/uploads/*
+!Monster.WebApp/Monster.WebApp/wwwroot/uploads/.gitkeep

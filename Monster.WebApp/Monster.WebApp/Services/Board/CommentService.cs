@@ -20,6 +20,7 @@ public class CommentService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Comments
+            .AsNoTracking()
             .Where(c => c.PostId == postId && !c.IsDeleted)
             .OrderBy(c => c.CreatedAt)
             .ToListAsync();
@@ -62,32 +63,8 @@ public class CommentService
         if (comment == null || comment.IsDeleted)
             return false;
 
-        // 관리자는 모든 댓글 수정 가능
-        if (_authService.IsAdmin())
-        {
-            comment.Content = content;
-            comment.UpdatedAt = DateTime.UtcNow;
-            await context.SaveChangesAsync();
-            return true;
-        }
-
-        // Check authorization
-        var userId = _authService.GetCurrentUserId();
-        if (comment.UserId != null)
-        {
-            // Authenticated comment - must be owner
-            if (userId != comment.UserId)
-                return false;
-        }
-        else
-        {
-            // Anonymous comment - verify password
-            if (string.IsNullOrWhiteSpace(password) || comment.AuthorPassword == null)
-                return false;
-
-            if (!BCrypt.Net.BCrypt.Verify(password, comment.AuthorPassword))
-                return false;
-        }
+        if (!_authService.CanModifyContent(comment.UserId, comment.AuthorPassword, password))
+            return false;
 
         comment.Content = content;
         comment.UpdatedAt = DateTime.UtcNow;
@@ -104,31 +81,8 @@ public class CommentService
         if (comment == null || comment.IsDeleted)
             return false;
 
-        // 관리자는 모든 댓글 삭제 가능
-        if (_authService.IsAdmin())
-        {
-            comment.IsDeleted = true;
-            await context.SaveChangesAsync();
-            return true;
-        }
-
-        // Check authorization
-        var userId = _authService.GetCurrentUserId();
-        if (comment.UserId != null)
-        {
-            // Authenticated comment - must be owner
-            if (userId != comment.UserId)
-                return false;
-        }
-        else
-        {
-            // Anonymous comment - verify password
-            if (string.IsNullOrWhiteSpace(password) || comment.AuthorPassword == null)
-                return false;
-
-            if (!BCrypt.Net.BCrypt.Verify(password, comment.AuthorPassword))
-                return false;
-        }
+        if (!_authService.CanModifyContent(comment.UserId, comment.AuthorPassword, password))
+            return false;
 
         comment.IsDeleted = true;
         await context.SaveChangesAsync();
