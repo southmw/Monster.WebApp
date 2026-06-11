@@ -142,6 +142,9 @@ public class AuthService
         _cache.Remove(attemptsKey);
         _cache.Remove(lockoutKey);
 
+        // 쿠키 사용자 유효성 캐시를 즉시 갱신 (이전에 남은 무효 판정이 새 로그인을 막지 않도록)
+        _cache.Set($"{AppConstants.CacheKeys.UserValidPrefix}{user.Id}", true, TimeSpan.FromMinutes(5));
+
         // Create claims
         var claims = new List<Claim>
         {

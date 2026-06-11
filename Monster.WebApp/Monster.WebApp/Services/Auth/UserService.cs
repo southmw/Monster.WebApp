@@ -1,16 +1,20 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Monster.WebApp.Data;
 using Monster.WebApp.Models.Auth;
+using Monster.WebApp.Shared;
 
 namespace Monster.WebApp.Services.Auth;
 
 public class UserService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly IMemoryCache _cache;
 
-    public UserService(IDbContextFactory<ApplicationDbContext> contextFactory)
+    public UserService(IDbContextFactory<ApplicationDbContext> contextFactory, IMemoryCache cache)
     {
         _contextFactory = contextFactory;
+        _cache = cache;
     }
 
     public async Task<List<User>> GetAllUsersAsync()
@@ -113,6 +117,9 @@ public class UserService
         user.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
+
+        // 쿠키 사용자 유효성 캐시 제거 — 비활성화가 5분 캐시 지연 없이 다음 요청부터 반영되도록
+        _cache.Remove($"{AppConstants.CacheKeys.UserValidPrefix}{userId}");
         return true;
     }
 

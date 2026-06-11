@@ -86,8 +86,8 @@ using var context = await _contextFactory.CreateDbContextAsync();
 ## 인증 시스템
 
 - **방식**: ASP.NET Core Cookie Authentication (7일 세션, SlidingExpiration)
-- **쿠키 보안**(`Program.cs`): `HttpOnly=true`, `SameSite=Lax`, `SecurePolicy`는 개발=SameAsRequest / 프로덕션=Always
-- **쿠키 사용자 검증**(`OnValidatePrincipal`): 쿠키의 사용자 Id가 DB에 실재하고 `IsActive`인지 확인 (사용자별 5분 MemoryCache). 불일치 시 자동 로그아웃 — 다른 DB에서 발급된 스테일 쿠키(개발 중 연결 전환/DB 재생성)로 인한 FK 오류와 비활성화된 사용자의 세션 잔존을 방지. 비활성화는 최대 5분 내 반영
+- **쿠키 보안**(`Program.cs`): `HttpOnly=true`, `SameSite=Lax`, `SecurePolicy`는 개발=SameAsRequest / 프로덕션=Always. 단, **HTTPS 미지원 호스팅**(현재 MonsterASP 무료 플랜)에서는 Secure 쿠키를 브라우저가 저장하지 않아 로그인이 유지되지 않음 → 설정 `Auth:AllowInsecureHttpCookies=true`(appsettings.json)로 프로덕션에서도 SameAsRequest 허용. **HTTPS 가능한 환경으로 이전 시 이 설정을 반드시 제거할 것**(인증 쿠키 평문 전송 위험)
+- **쿠키 사용자 검증**(`OnValidatePrincipal`): 쿠키의 사용자 Id가 DB에 실재하고 `IsActive`인지 확인 (사용자별 5분 MemoryCache — 키는 `AppConstants.CacheKeys.UserValidPrefix`). 불일치 시 자동 로그아웃 — 스테일 쿠키 FK 오류와 비활성 사용자 세션 잔존 방지. **유효(true) 결과만 캐시할 것** — 무효 결과를 캐시하면 같은 Id 재로그인(DB 재생성 후 재가입 등) 시 로그인이 즉시 풀리는 루프 발생. 로그인 성공 시 캐시 갱신(AuthService), 비활성화 시 캐시 제거(UserService)로 즉시 반영
 - **역할**: Admin, SubAdmin, User
 - **정책**: AdminOnly, SubAdminOrHigher, AuthenticatedUser
 - **상수 정의**: 역할/정책 문자열은 [Shared/AppConstants.cs](Monster.WebApp/Monster.WebApp/Shared/AppConstants.cs)에 중앙 정의 (`AppConstants.Roles.*`, `AppConstants.Policies.*`). 하드코딩 금지.

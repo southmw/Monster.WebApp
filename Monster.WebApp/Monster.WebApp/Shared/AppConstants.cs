@@ -22,4 +22,11 @@ public static class AppConstants
         public const int PostMaxLength = 100_000;
         public const int CommentMaxLength = 20_000;
     }
+
+    /// <summary>MemoryCache 키 (여러 위치에서 공유하는 키만 정의)</summary>
+    public static class CacheKeys
+    {
+        /// <summary>쿠키 사용자 유효성 캐시 — OnValidatePrincipal(Program.cs)/AuthService/UserService 공유</summary>
+        public const string UserValidPrefix = "user_valid_";
+    }
 }

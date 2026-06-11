@@ -73,8 +73,13 @@ namespace Monster.WebApp
                     // 쿠키 보안 강화
                     options.Cookie.HttpOnly = true; // JS 접근 차단 (XSS 시 쿠키 탈취 방어)
                     options.Cookie.SameSite = SameSiteMode.Lax; // CSRF 완화 (로그인 폼 호환 위해 Lax)
-                    // 개발(http)에서는 SameAsRequest, 프로덕션(https)에서는 Always 강제
-                    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+                    // 개발(http)에서는 SameAsRequest, 프로덕션(https)에서는 Always 강제.
+                    // 단, HTTPS 미지원 호스팅(예: MonsterASP 무료 플랜)에서는 Secure 쿠키를 브라우저가
+                    // 저장하지 않아 로그인이 유지되지 않으므로 설정 Auth:AllowInsecureHttpCookies=true로
+                    // 프로덕션에서도 SameAsRequest 허용. 인증 쿠키가 평문 HTTP로 전송될 수 있으므로
+                    // HTTPS 가능한 환경으로 이전 시 반드시 이 설정을 제거할 것(기본 Always 복원).
+                    var allowInsecureCookies = builder.Configuration.GetValue<bool>("Auth:AllowInsecureHttpCookies");
+                    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() || allowInsecureCookies
                         ? CookieSecurePolicy.SameAsRequest
                         : CookieSecurePolicy.Always;
 
@@ -87,13 +92,14 @@ namespace Monster.WebApp
                         var userIdClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                         if (!int.TryParse(userIdClaim, out var userId))
                         {
+                            Log.Warning("쿠키 검증 실패(사용자 Id 클레임 없음/형식 오류)로 강제 로그아웃: Claim={Claim}", userIdClaim);
                             context.RejectPrincipal();
                             await TrySignOutAsync(context.HttpContext);
                             return;
                         }
 
                         var cache = context.HttpContext.RequestServices.GetRequiredService<IMemoryCache>();
-                        var cacheKey = $"user_valid_{userId}";
+                        var cacheKey = $"{AppConstants.CacheKeys.UserValidPrefix}{userId}";
 
                         if (!cache.TryGetValue(cacheKey, out bool isValid))
                         {
@@ -101,11 +107,19 @@ namespace Monster.WebApp
                                 .GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
                             await using var db = await contextFactory.CreateDbContextAsync();
                             isValid = await db.Users.AsNoTracking().AnyAsync(u => u.Id == userId && u.IsActive);
-                            cache.Set(cacheKey, isValid, TimeSpan.FromMinutes(5));
+
+                            // 유효(true)일 때만 캐시한다. 무효(false)를 캐시하면 로그아웃 직후
+                            // 같은 Id로 재로그인한 사용자(예: DB 재생성 후 재가입으로 Id 재사용)가
+                            // 남은 false 캐시에 걸려 5분간 로그인이 즉시 풀리는 루프가 생긴다.
+                            if (isValid)
+                            {
+                                cache.Set(cacheKey, true, TimeSpan.FromMinutes(5));
+                            }
                         }
 
                         if (!isValid)
                         {
+                            Log.Warning("쿠키 검증 실패(DB에 없거나 비활성 사용자)로 강제 로그아웃: UserId={UserId}", userId);
                             context.RejectPrincipal();
                             await TrySignOutAsync(context.HttpContext);
                         }
