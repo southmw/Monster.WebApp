@@ -2,6 +2,7 @@
 @using Monster.WebApp.Services.Board
 @using Microsoft.Extensions.DependencyInjection
 @inject IServiceScopeFactory ScopeFactory
+@inject ILogger<NavMenu> Logger
 @rendermode InteractiveServer
 
 <MudNavMenu Class="mud-width-full">
@@ -68,17 +69,25 @@
 
     private async Task LoadDataAsync()
     {
-        // 각 서비스 호출에 독립적인 scope 사용하여 DbContext 충돌 방지
-        using (var scope = ScopeFactory.CreateScope())
+        try
         {
-            var categoryService = scope.ServiceProvider.GetRequiredService<CategoryService>();
-            _categories = await categoryService.GetAllActiveCategoriesAsync();
-        }
+            // 각 서비스 호출에 독립적인 scope 사용하여 DbContext 충돌 방지
+            using (var scope = ScopeFactory.CreateScope())
+            {
+                var categoryService = scope.ServiceProvider.GetRequiredService<CategoryService>();
+                _categories = await categoryService.GetAllActiveCategoriesAsync();
+            }
 
-        using (var scope = ScopeFactory.CreateScope())
+            using (var scope = ScopeFactory.CreateScope())
+            {
+                var roleService = scope.ServiceProvider.GetRequiredService<RoleService>();
+                _isAdmin = await roleService.IsAdminAsync();
+            }
+        }
+        catch (Exception ex)
         {
-            var roleService = scope.ServiceProvider.GetRequiredService<RoleService>();
-            _isAdmin = await roleService.IsAdminAsync();
+            // 로드 실패 시 기본 메뉴(홈)만 표시 — 네비게이션 전체가 깨지지 않도록
+            Logger.LogError(ex, "네비게이션 메뉴 데이터 로드 실패");
         }
     }
 

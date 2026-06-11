@@ -119,9 +119,15 @@ public class CategoryAccessService
         // Check write permissions
         if (userId != null)
         {
+            // 사용자 역할을 먼저 로드해 술어 내 중첩 서브쿼리(UserRoles.Any)를 제거
+            var userRoleIds = await context.UserRoles
+                .Where(ur => ur.UserId == userId.Value)
+                .Select(ur => ur.RoleId)
+                .ToListAsync();
+
             var hasWriteAccess = await context.CategoryAccesses
                 .AnyAsync(ca => ca.CategoryId == categoryId &&
-                               (ca.UserId == userId || (ca.RoleId != null && context.UserRoles.Any(ur => ur.UserId == userId && ur.RoleId == ca.RoleId))) &&
+                               (ca.UserId == userId || (ca.RoleId != null && userRoleIds.Contains(ca.RoleId.Value))) &&
                                (ca.AccessType == AccessType.Write || ca.AccessType == AccessType.Manage));
 
             return hasWriteAccess;
@@ -145,9 +151,15 @@ public class CategoryAccessService
         {
             await using var context = await _contextFactory.CreateDbContextAsync();
 
+            // 사용자 역할을 먼저 로드해 술어 내 중첩 서브쿼리(UserRoles.Any)를 제거
+            var userRoleIds = await context.UserRoles
+                .Where(ur => ur.UserId == userId.Value)
+                .Select(ur => ur.RoleId)
+                .ToListAsync();
+
             var hasManageAccess = await context.CategoryAccesses
                 .AnyAsync(ca => ca.CategoryId == categoryId &&
-                               (ca.UserId == userId || (ca.RoleId != null && context.UserRoles.Any(ur => ur.UserId == userId && ur.RoleId == ca.RoleId))) &&
+                               (ca.UserId == userId || (ca.RoleId != null && userRoleIds.Contains(ca.RoleId.Value))) &&
                                ca.AccessType == AccessType.Manage);
 
             return hasManageAccess;

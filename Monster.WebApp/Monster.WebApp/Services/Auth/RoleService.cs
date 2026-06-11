@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Monster.WebApp.Data;
 using Monster.WebApp.Models.Auth;
 using Monster.WebApp.Shared;
-using System.Security.Claims;
 
 namespace Monster.WebApp.Services.Auth;
 
@@ -20,7 +19,7 @@ public class RoleService
     public async Task<List<Role>> GetAllRolesAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.Roles.ToListAsync();
+        return await context.Roles.AsNoTracking().ToListAsync();
     }
 
     public async Task<bool> AssignRoleAsync(int userId, int roleId)
@@ -65,6 +64,7 @@ public class RoleService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.UserRoles
+            .AsNoTracking()
             .Where(ur => ur.UserId == userId)
             .Select(ur => ur.Role)
             .ToListAsync();

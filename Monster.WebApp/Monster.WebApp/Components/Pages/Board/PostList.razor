@@ -7,13 +7,37 @@
 @inject AuthService AuthService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
+@inject ILogger<PostList> Logger
 @rendermode InteractiveServer
 
-@if (category == null)
+@if (_isLoading)
 {
     <div style="display: flex; justify-content: center; padding: 64px 0;">
         <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
     </div>
+}
+else if (_loadFailed)
+{
+    <MudPaper Elevation="0" Style="padding: 64px; text-align: center; border: 1px solid rgba(0, 0, 0, 0.08);">
+        <MudIcon Icon="@Icons.Material.Outlined.ErrorOutline" Size="Size.Large" Color="Color.Error" Style="margin-bottom: 16px;" />
+        <MudText Typo="Typo.h6" Color="Color.Error">게시글 목록을 불러오지 못했습니다</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top: 8px;">
+            잠시 후 다시 시도해주세요.
+        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RetryLoadAsync" Style="margin-top: 24px;">
+            다시 시도
+        </MudButton>
+    </MudPaper>
+}
+else if (category == null)
+{
+    <MudPaper Elevation="0" Style="padding: 64px; text-align: center; border: 1px solid rgba(0, 0, 0, 0.08);">
+        <MudIcon Icon="@Icons.Material.Outlined.Error" Size="Size.Large" Color="Color.Error" Style="margin-bottom: 16px;" />
+        <MudText Typo="Typo.h6" Color="Color.Error">게시판을 찾을 수 없습니다</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/board" Style="margin-top: 24px;">
+            게시판 목록으로
+        </MudButton>
+    </MudPaper>
 }
 else if (!hasAccess)
 {
@@ -66,8 +90,8 @@ else
         }
         <MudTextField @bind-Value="_searchQuery" Variant="Variant.Outlined"
                       Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search"
-                      OnAdornmentClick="SearchAsync" Margin="Margin.Dense"
-                      OnKeyUp="@(async (e) => { if (e.Key == "Enter") await SearchAsync(); })"
+                      OnAdornmentClick="Search" Margin="Margin.Dense"
+                      OnKeyUp="@((e) => { if (e.Key == "Enter") Search(); })"
                       Placeholder="검색" Clearable="true" Style="max-width: 250px;" />
     </div>
 
@@ -170,6 +194,16 @@ else
     [Parameter]
     public string CategoryUrl { get; set; } = string.Empty;
 
+    // 페이지/페이지크기/검색어를 URL 쿼리로 보존 (뒤로가기/새로고침 시 상태 유지)
+    [SupplyParameterFromQuery(Name = "page")]
+    public int? Page { get; set; }
+
+    [SupplyParameterFromQuery(Name = "size")]
+    public int? PageSizeQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "q")]
+    public string? Query { get; set; }
+
     private Category? category;
     private List<Post>? posts;
     private int totalCount = 0;
@@ -177,64 +211,99 @@ else
     private int pageSize = 20;
     private bool hasAccess = false;
     private bool canWrite = false;
+    private bool _isLoading = true;
+    private bool _loadFailed = false;
     private string _searchQuery = string.Empty;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadDataAsync();
-    }
+    private static readonly int[] AllowedPageSizes = { 10, 20, 50, 100 };
 
     protected override async Task OnParametersSetAsync()
     {
+        currentPage = Page is > 0 ? Page.Value : 1;
+        pageSize = PageSizeQuery != null && AllowedPageSizes.Contains(PageSizeQuery.Value) ? PageSizeQuery.Value : 20;
+        _searchQuery = Query ?? string.Empty;
         await LoadDataAsync();
     }
 
     private async Task LoadDataAsync()
     {
-        category = await CategoryService.GetCategoryByUrlSlugAsync(CategoryUrl);
-
-        if (category != null)
+        try
         {
-            // Check access permissions
-            hasAccess = await CategoryAccessService.CanAccessCategoryAsync(category.Id);
+            _loadFailed = false;
+            category = await CategoryService.GetCategoryByUrlSlugAsync(CategoryUrl);
 
-            if (!hasAccess)
+            if (category != null)
             {
-                return;
+                // Check access permissions
+                hasAccess = await CategoryAccessService.CanAccessCategoryAsync(category.Id);
+
+                if (!hasAccess)
+                {
+                    return;
+                }
+
+                // Check write permissions
+                canWrite = await CategoryAccessService.CanWriteToCategoryAsync(category.Id);
+
+                var result = await PostService.GetPostsByCategoryAsync(category.Id, currentPage, pageSize, _searchQuery);
+                posts = result.Posts;
+                totalCount = result.TotalCount;
             }
-
-            // Check write permissions
-            canWrite = await CategoryAccessService.CanWriteToCategoryAsync(category.Id);
-
-            var result = await PostService.GetPostsByCategoryAsync(category.Id, currentPage, pageSize, _searchQuery);
-            posts = result.Posts;
-            totalCount = result.TotalCount;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "게시글 목록 로드 실패 (Category: {CategoryUrl})", CategoryUrl);
+            _loadFailed = true;
+        }
+        finally
+        {
+            _isLoading = false;
         }
     }
 
-    private async Task OnPageChanged(int page)
+    private async Task RetryLoadAsync()
     {
-        currentPage = page;
+        _isLoading = true;
         await LoadDataAsync();
     }
 
-    private async Task OnPageSizeChanged(int size)
+    /// <summary>현재 페이지/페이지크기/검색어를 쿼리스트링에 반영해 이동 (기본값은 생략)</summary>
+    private void NavigateWithState()
+    {
+        var uri = NavigationManager.GetUriWithQueryParameters(
+            $"/board/{CategoryUrl}",
+            new Dictionary<string, object?>
+            {
+                ["page"] = currentPage == 1 ? null : currentPage,
+                ["size"] = pageSize == 20 ? null : pageSize,
+                ["q"] = string.IsNullOrWhiteSpace(_searchQuery) ? null : _searchQuery
+            });
+        NavigationManager.NavigateTo(uri);
+    }
+
+    private void OnPageChanged(int page)
+    {
+        currentPage = page;
+        NavigateWithState();
+    }
+
+    private void OnPageSizeChanged(int size)
     {
         pageSize = size;
         currentPage = 1;
-        await LoadDataAsync();
+        NavigateWithState();
     }
 
-    private async Task SearchAsync()
+    private void Search()
     {
         currentPage = 1;
-        await LoadDataAsync();
+        NavigateWithState();
     }
 
-    private async Task ClearSearch()
+    private void ClearSearch()
     {
         _searchQuery = string.Empty;
         currentPage = 1;
-        await LoadDataAsync();
+        NavigateWithState();
     }
 }

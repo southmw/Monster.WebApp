@@ -43,7 +43,8 @@
         <div class="write-container">
             <div class="form-section">
                 <MudTextField @bind-Value="title" Label="제목" Variant="Variant.Outlined"
-                              Required="true" FullWidth="true" Class="compact-input" Margin="Margin.Dense" />
+                              Required="true" FullWidth="true" MaxLength="200"
+                              Class="compact-input" Margin="Margin.Dense" />
             </div>
 
             @if (!isAuthenticated)
@@ -139,6 +140,12 @@
         if (string.IsNullOrWhiteSpace(title))
         {
             Snackbar.Add("제목을 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        if (title.Length > 200)
+        {
+            Snackbar.Add("제목은 200자 이내로 입력해주세요.", Severity.Warning);
             return;
         }
 

@@ -17,6 +17,7 @@ public class UserService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Users
+            .AsNoTracking()
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
             .OrderByDescending(u => u.CreatedAt)
@@ -28,6 +29,7 @@ public class UserService
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         var query = context.Users
+            .AsNoTracking()
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role);
 
@@ -45,6 +47,7 @@ public class UserService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Users
+            .AsNoTracking()
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(u => u.Id == userId);
@@ -54,6 +57,7 @@ public class UserService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Users
+            .AsNoTracking()
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(u => u.Username == username);
@@ -63,6 +67,7 @@ public class UserService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Users
+            .AsNoTracking()
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(u => u.Email == email);
@@ -132,6 +137,7 @@ public class UserService
 
         var lowerSearchTerm = searchTerm.ToLower();
         return await context.Users
+            .AsNoTracking()
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
             .Where(u => u.Username.ToLower().Contains(lowerSearchTerm) ||
@@ -157,6 +163,7 @@ public class UserService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Users
+            .AsNoTracking()
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
             .OrderByDescending(u => u.CreatedAt)
@@ -237,25 +244,27 @@ public class UserService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
-        var postCount = await context.Posts
-            .CountAsync(p => p.UserId == userId && !p.IsDeleted);
-
         var commentCount = await context.Comments
             .CountAsync(c => c.UserId == userId && !c.IsDeleted);
 
-        var posts = await context.Posts
+        // 게시글 수/조회수/추천수를 DB에서 단일 쿼리로 집계 (전체 게시글 로드 방지)
+        var postStats = await context.Posts
             .Where(p => p.UserId == userId && !p.IsDeleted)
-            .ToListAsync();
-
-        var totalViews = posts.Sum(p => p.ViewCount);
-        var totalVotes = posts.Sum(p => p.VoteCount);
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Count = g.Count(),
+                TotalViews = g.Sum(p => p.ViewCount),
+                TotalVotes = g.Sum(p => p.VoteCount)
+            })
+            .FirstOrDefaultAsync();
 
         return new UserStatistics
         {
-            PostCount = postCount,
+            PostCount = postStats?.Count ?? 0,
             CommentCount = commentCount,
-            TotalViews = totalViews,
-            TotalVotes = totalVotes
+            TotalViews = postStats?.TotalViews ?? 0,
+            TotalVotes = postStats?.TotalVotes ?? 0
         };
     }
 }

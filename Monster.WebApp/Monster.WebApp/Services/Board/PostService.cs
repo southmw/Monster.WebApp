@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Monster.WebApp.Data;
 using Monster.WebApp.Models.Board;
 using Monster.WebApp.Services.Auth;
+using Monster.WebApp.Shared;
 
 namespace Monster.WebApp.Services.Board;
 
@@ -59,7 +60,6 @@ public class PostService
             .AsNoTracking()
             .Include(p => p.Category)
             .Include(p => p.Comments.Where(c => !c.IsDeleted))
-            .Include(p => p.Attachments)
             .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
     }
 
@@ -151,8 +151,18 @@ public class PostService
             post.ViewCount++;
             await context.SaveChangesAsync();
 
-            // 세션에 조회 기록 저장
-            httpContext.Session.SetString(viewedPostsKey, "1");
+            // 세션에 조회 기록 저장.
+            // Blazor 서킷(SignalR) 안에서는 HTTP 응답이 이미 시작된 상태라 세션 쿠키가 없는
+            // 사용자의 신규 세션을 확립할 수 없음 — 이 경우 중복 방지 기록만 생략하고
+            // 조회수 증가 자체는 유지한다 (호출부에서 페이지 최초 로드 시 1회만 호출).
+            try
+            {
+                httpContext.Session.SetString(viewedPostsKey, "1");
+            }
+            catch (InvalidOperationException)
+            {
+                // "The session cannot be established after the response has started"
+            }
             return true;
         }
         return false;
@@ -170,7 +180,7 @@ public class PostService
             return (false, "게시글을 찾을 수 없습니다.");
 
         var userId = _authService.GetCurrentUserId();
-        var ipAddress = GetClientIpAddress();
+        var ipAddress = ClientIpHelper.GetClientIp(_httpContextAccessor.HttpContext);
 
         // 중복 투표 체크
         bool hasVoted;
@@ -215,7 +225,7 @@ public class PostService
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         var userId = _authService.GetCurrentUserId();
-        var ipAddress = GetClientIpAddress();
+        var ipAddress = ClientIpHelper.GetClientIp(_httpContextAccessor.HttpContext);
 
         if (userId != null)
         {
@@ -229,48 +239,20 @@ public class PostService
         }
     }
 
-    private string? GetClientIpAddress()
-    {
-        var httpContext = _httpContextAccessor.HttpContext;
-        if (httpContext == null)
-            return null;
-
-        // X-Forwarded-For 헤더 확인 (프록시/로드밸런서 뒤에 있는 경우)
-        var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(forwardedFor))
-        {
-            return forwardedFor.Split(',').FirstOrDefault()?.Trim();
-        }
-
-        return httpContext.Connection.RemoteIpAddress?.ToString();
-    }
-
     public async Task<int> GetTotalPostCountAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Posts.CountAsync(p => !p.IsDeleted);
     }
 
-    public async Task<bool> UpdatePostContentAsync(int postId, string content)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-
-        var post = await context.Posts.FindAsync(postId);
-        if (post == null || post.IsDeleted)
-            return false;
-
-        post.Content = content;
-        await context.SaveChangesAsync();
-        return true;
-    }
-
+    // 홈 화면은 익명에게도 노출되므로 완전 공개(IsPublic && !RequireAuth) 카테고리의 글만 집계
     public async Task<List<Post>> GetRecentPostsAsync(int count = 5)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Posts
             .AsNoTracking()
             .Include(p => p.Category)
-            .Where(p => !p.IsDeleted && p.Category.IsActive)
+            .Where(p => !p.IsDeleted && p.Category.IsActive && p.Category.IsPublic && !p.Category.RequireAuth)
             .OrderByDescending(p => p.CreatedAt)
             .Take(count)
             .ToListAsync();
@@ -282,7 +264,7 @@ public class PostService
         return await context.Posts
             .AsNoTracking()
             .Include(p => p.Category)
-            .Where(p => !p.IsDeleted && p.Category.IsActive)
+            .Where(p => !p.IsDeleted && p.Category.IsActive && p.Category.IsPublic && !p.Category.RequireAuth)
             .OrderByDescending(p => p.ViewCount)
             .ThenByDescending(p => p.VoteCount)
             .Take(count)

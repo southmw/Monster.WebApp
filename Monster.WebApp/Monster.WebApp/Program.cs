@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.HttpOverrides;
+using System.Net;
 using Monster.WebApp.Components;
 using Monster.WebApp.Data;
 using Monster.WebApp.Services.Auth;
@@ -126,6 +128,30 @@ namespace Monster.WebApp
 
             var app = builder.Build();
 
+            // 신뢰할 수 있는 프록시(ForwardedHeaders:KnownProxies 설정) 뒤에 배포된 경우에만
+            // X-Forwarded-For/Proto를 수용해 RemoteIpAddress를 재작성.
+            // 미설정 시 미들웨어를 등록하지 않으므로 클라이언트의 헤더 스푸핑이 IP 판정에 영향을 주지 않음.
+            var knownProxies = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>();
+            if (knownProxies is { Length: > 0 })
+            {
+                var forwardedOptions = new ForwardedHeadersOptions
+                {
+                    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+                };
+                foreach (var proxy in knownProxies)
+                {
+                    if (IPAddress.TryParse(proxy, out var proxyIp))
+                    {
+                        forwardedOptions.KnownProxies.Add(proxyIp);
+                    }
+                    else
+                    {
+                        Log.Warning("ForwardedHeaders:KnownProxies에 잘못된 IP가 있습니다: {Proxy}", proxy);
+                    }
+                }
+                app.UseForwardedHeaders(forwardedOptions);
+            }
+
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
             {
@@ -140,6 +166,16 @@ namespace Monster.WebApp
 
             app.UseStatusCodePagesWithReExecute("/not-found");
             app.UseHttpsRedirection();
+
+            // 응답 보안 헤더 (MIME 스니핑/클릭재킹 방어)
+            // CSP는 Blazor Server + MudBlazor의 인라인 스크립트/스타일 의존성 때문에 별도 검토 후 도입
+            app.Use(async (context, next) =>
+            {
+                context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+                context.Response.Headers["X-Frame-Options"] = "DENY";
+                context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+                await next();
+            });
 
             app.UseStaticFiles();
 

@@ -5,6 +5,7 @@
 @inject CategoryService CategoryService
 @inject PostService PostService
 @inject AuthService AuthService
+@inject CategoryAccessService CategoryAccessService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @rendermode InteractiveServer
@@ -47,7 +48,8 @@
         <div class="write-container">
             <div class="form-section">
                 <MudTextField @bind-Value="_title" Label="제목" Variant="Variant.Outlined"
-                              Required="true" FullWidth="true" Class="compact-input" Margin="Margin.Dense" />
+                              Required="true" FullWidth="true" MaxLength="200"
+                              Class="compact-input" Margin="Margin.Dense" />
             </div>
 
             <div class="form-section">
@@ -99,6 +101,15 @@
 
         if (_post == null)
         {
+            _isLoading = false;
+            return;
+        }
+
+        // 카테고리 접근 권한 검증 (URL 직접 입력으로 비공개 게시판 우회 차단)
+        if (!await CategoryAccessService.CanAccessCategoryAsync(_post.CategoryId))
+        {
+            _canEdit = false;
+            _errorMessage = "이 게시판에 접근할 권한이 없습니다.";
             _isLoading = false;
             return;
         }
@@ -155,6 +166,12 @@
         if (string.IsNullOrWhiteSpace(_title))
         {
             Snackbar.Add("제목을 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        if (_title.Length > 200)
+        {
+            Snackbar.Add("제목은 200자 이내로 입력해주세요.", Severity.Warning);
             return;
         }
 

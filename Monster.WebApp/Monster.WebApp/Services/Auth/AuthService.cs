@@ -20,6 +20,10 @@ public class AuthService
     private const int MaxLoginAttempts = 5;
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
 
+    // 회원가입 시도 제한 설정 (IP 기반 대량 계정 생성 방지)
+    private const int MaxRegistrationsPerWindow = 3;
+    private static readonly TimeSpan RegistrationWindow = TimeSpan.FromHours(1);
+
     public AuthService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         IHttpContextAccessor httpContextAccessor,
@@ -32,6 +36,16 @@ public class AuthService
 
     public async Task<User?> RegisterAsync(string username, string email, string password, string displayName)
     {
+        // IP 기반 가입 횟수 제한. HttpContext가 없는 내부 호출(관리자 시드)은 제한 대상에서 제외.
+        var clientIp = ClientIpHelper.GetClientIp(_httpContextAccessor.HttpContext);
+        var registrationKey = clientIp != null ? $"register_attempts_{clientIp}" : null;
+        if (registrationKey != null &&
+            _cache.TryGetValue(registrationKey, out int registrations) &&
+            registrations >= MaxRegistrationsPerWindow)
+        {
+            return null;
+        }
+
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         // Check if username or email already exists
@@ -50,20 +64,25 @@ public class AuthService
             IsActive = true
         };
 
-        context.Users.Add(user);
-        await context.SaveChangesAsync();
-
-        // Assign default "User" role
+        // 기본 "User" 역할을 내비게이션에 함께 추가해 단일 SaveChanges로 원자 저장
+        // (사용자만 저장되고 역할 할당이 누락되는 중간 실패 방지)
         var userRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == AppConstants.Roles.User);
         if (userRole != null)
         {
-            context.UserRoles.Add(new UserRole
+            user.UserRoles.Add(new UserRole
             {
-                UserId = user.Id,
                 RoleId = userRole.Id,
                 AssignedAt = DateTime.UtcNow
             });
-            await context.SaveChangesAsync();
+        }
+
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        if (registrationKey != null)
+        {
+            var count = _cache.TryGetValue(registrationKey, out int current) ? current : 0;
+            _cache.Set(registrationKey, count + 1, RegistrationWindow);
         }
 
         return user;
@@ -74,7 +93,7 @@ public class AuthService
     /// </summary>
     public async Task<(User? User, string? ErrorMessage)> LoginAsync(string username, string password)
     {
-        var clientIp = GetClientIpAddress();
+        var clientIp = ClientIpHelper.GetClientIp(_httpContextAccessor.HttpContext) ?? "unknown";
         var lockoutKey = $"login_lockout_{username}_{clientIp}";
         var attemptsKey = $"login_attempts_{username}_{clientIp}";
 
@@ -157,21 +176,6 @@ public class AuthService
         return (user, null);
     }
 
-    private string? GetClientIpAddress()
-    {
-        var httpContext = _httpContextAccessor.HttpContext;
-        if (httpContext == null)
-            return "unknown";
-
-        var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(forwardedFor))
-        {
-            return forwardedFor.Split(',').FirstOrDefault()?.Trim();
-        }
-
-        return httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-    }
-
     public async Task LogoutAsync()
     {
         var httpContext = _httpContextAccessor.HttpContext;
@@ -197,6 +201,7 @@ public class AuthService
 
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Users
+            .AsNoTracking()
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(u => u.Id == userId);

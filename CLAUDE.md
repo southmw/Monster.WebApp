@@ -25,6 +25,8 @@ dotnet ef migrations add MigrationName --project Monster.WebApp/Monster.WebApp/M
 dotnet ef database update --project Monster.WebApp/Monster.WebApp/Monster.WebApp.csproj
 ```
 
+> 솔루션 파일은 `.sln`이 아닌 `.slnx`(신형 XML 솔루션 포맷)임 — 구버전 도구 사용 시 주의.
+
 > 개발 환경에서는 앱 시작 시 마이그레이션이 자동 적용됨(`Program.ApplyMigrationsAsync`). 프로덕션은 위 `database update`를 배포 단계에서 수동 실행.
 
 **개발 서버**: http://localhost:5104 (HTTP), https://localhost:7056 (HTTPS)
@@ -43,7 +45,9 @@ Get-Process -Name dotnet -ErrorAction SilentlyContinue | Stop-Process -Force
 ### 프로젝트 구조
 - **Monster.WebApp**: 서버 프로젝트 - DB 접근, API, 레이아웃, 대부분의 페이지
 - **Monster.WebApp.Client**: 클라이언트 프로젝트 - WebAssembly 전용 컴포넌트
-- **Monster.WebApp.Tests**: xUnit 테스트 프로젝트 - 순수 로직(예: PasswordValidator, HtmlContentHelper) 단위 테스트
+- **Monster.WebApp.Tests**: xUnit 테스트 프로젝트. 위치는 루트가 아닌 `Monster.WebApp/Monster.WebApp.Tests/` (서버 프로젝트 폴더와 나란히 중첩)
+  - 순수 로직 테스트: PasswordValidatorTests, HtmlContentHelperTests
+  - 서비스 테스트: AuthServiceCanModifyContentTests, CategoryAccessServiceTests — SQLite in-memory 기반 (`TestInfrastructure.cs`의 `TestDbContextFactory`(EnsureCreated로 HasData 시드 포함) + `TestHttpContext` 헬퍼 사용. 새 서비스 테스트도 이 인프라를 재사용할 것)
 
 ### 렌더링 모드
 - **Server 프로젝트**: 서버 리소스(DB, 파일)가 필요한 컴포넌트, `[StreamRendering]`
@@ -86,6 +90,9 @@ using var context = await _contextFactory.CreateDbContextAsync();
 - **상수 정의**: 역할/정책 문자열은 [Shared/AppConstants.cs](Monster.WebApp/Monster.WebApp/Shared/AppConstants.cs)에 중앙 정의 (`AppConstants.Roles.*`, `AppConstants.Policies.*`). 하드코딩 금지.
 - **수정/삭제 권한 검증**: `AuthService.CanModifyContent(ownerUserId, authorPasswordHash, providedPassword)` 단일 메서드로 통일 (관리자 통과 / 로그인 작성물은 본인 / 익명 작성물은 비밀번호 검증). PostService·CommentService의 Update/Delete가 이를 호출 — 권한 로직을 복제하지 말 것.
 - **로그인 보안**: 5회 실패 시 15분 잠금 (IP + 사용자명 조합, MemoryCache 기반)
+- **회원가입 제한**: IP당 1시간에 3회 (MemoryCache 기반). HttpContext 없는 내부 호출(관리자 시드)은 제한 제외
+- **클라이언트 IP 추출**: [Shared/ClientIpHelper.cs](Monster.WebApp/Monster.WebApp/Shared/ClientIpHelper.cs)의 `GetClientIp()`만 사용 — `RemoteIpAddress` 기반. **X-Forwarded-For 헤더를 직접 파싱하지 말 것**(스푸핑으로 잠금/중복투표 우회 가능). 프록시 뒤 배포 시 설정 `ForwardedHeaders:KnownProxies`(string[])에 프록시 IP를 지정하면 `Program.cs`의 ForwardedHeaders 미들웨어가 RemoteIpAddress를 재작성함
+- **응답 보안 헤더**: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy` — `Program.cs` 인라인 미들웨어. CSP는 Blazor Server + MudBlazor의 인라인 스크립트/스타일 의존성 때문에 미도입(도입 시 별도 검토 필요)
 - **비밀번호 정책**: 최소 8자, 대문자/소문자/숫자/특수문자 각 1개 필수. 검증은 [Shared/PasswordValidator.cs](Monster.WebApp/Monster.WebApp/Shared/PasswordValidator.cs)에서 수행.
 - **기본 관리자 시드**: `Program.InitializeDefaultAdminAsync()`가 앱 시작 시 admin 계정이 없으면 자동 생성. 시드 정보는 설정 `AdminSeed:Username` / `AdminSeed:Email` / `AdminSeed:Password`에서 읽음(미지정 시 기본값 fallback, 비밀번호는 로그에 기록하지 않음).
 - **접근 거부**: 권한 부족 시 `/account/access-denied` (`Components/Pages/Account/AccessDenied.razor`)로 이동
@@ -136,12 +143,18 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 
 - **DB**: SQL Server 2022 with EF Core 8.0.11
 - **연결**: `appsettings.json` → `ConnectionStrings:DefaultConnection`
+- **주의**: `appsettings.json`은 Git에 추적되지 않음 (DB 자격증명 포함). 새 클론 시 직접 생성 필요 — 형식은 README.md의 "데이터베이스 설정" 참조
 - **비밀번호 해싱**: BCrypt.Net-Next 4.0.3
-- **읽기 쿼리**: 조회 전용 메서드는 `.AsNoTracking()` 사용 (PostService/CommentService/CategoryService 목록·상세 조회)
+- **읽기 쿼리**: 모든 서비스의 조회 전용 메서드는 `.AsNoTracking()` 사용 (수정 후 SaveChanges 하는 메서드는 제외)
 
 ### 데이터 모델
 - **Auth**: User, Role, UserRole, CategoryAccess
 - **Board**: Category, Post, Comment, Attachment, PostVote
+- **댓글 중첩**: `Comment.ParentCommentId`(self-reference) + `Replies` 컬렉션으로 답글 트리 구성
+
+### 시드 데이터 (`ApplicationDbContext.OnModelCreating`의 `HasData`)
+- 역할 3종(Admin/SubAdmin/User), 기본 카테고리 3개: 자유게시판(`free`), 질문게시판(`questions`), 정보공유(`info`)
+- 시드 변경 시 마이그레이션이 새로 생성되므로 주의
 
 ### 삭제 규칙
 - Post 삭제 → Comment/Attachment 자동 삭제 (Cascade)
@@ -150,11 +163,12 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 
 ## 게시판 기능
 
-- **조회수 중복 방지**: 세션 기반 (같은 세션에서 재조회 시 카운트 미증가)
+- **조회수 중복 방지**: 세션 기반 (같은 세션에서 재조회 시 카운트 미증가). 단, Blazor 서킷 내 SPA 내비게이션(예: 글 등록 직후 상세 이동)에서는 응답이 이미 시작돼 신규 세션을 확립할 수 없음 — 이 경우 `IncrementViewCountAsync`가 중복 방지 기록만 생략하고 조회수 증가는 유지(`InvalidOperationException` 무시 처리). 조회수 증가 호출은 PostDetail **최초 로드 시 1회만** 수행 (댓글/추천 후 새로고침에서 호출 금지 — 중복 카운트 방지)
 - **추천 중복 방지**: `PostVote` 모델로 투표 기록 저장 (로그인 사용자: UserId, 비로그인: IP 주소)
 - **공지 고정**: `Post.IsPinned`/`PinnedAt` 필드. `PostService.TogglePinAsync()`로 토글 (Admin/SubAdmin 권한). 목록 정렬은 공지글(PinnedAt 최신순) → 일반글(CreatedAt 최신순), 공지글은 상단에 보라색 배경 + "공지" 칩 표시
-- **카테고리 접근 제어**: `CategoryAccess` 모델 + `CategoryAccessService` (N+1 회피 위해 전체 로딩 후 메모리 필터링)
+- **카테고리 접근 제어**: `CategoryAccess` 모델 + `CategoryAccessService` (N+1 회피 위해 전체 로딩 후 메모리 필터링). **목록(PostList)·상세(PostDetail)·수정(PostEdit)·작성(PostWrite) 페이지 모두 `CanAccessCategoryAsync`/`CanWriteToCategoryAsync` 검증 필수** — 새 게시글 노출 경로를 추가할 때 반드시 포함할 것. 홈의 최근/인기 글은 완전 공개 카테고리(`IsPublic && !RequireAuth`)만 집계
 - **검색**: `/board/{slug}` 목록에서 지원
+- **페이지네이션**: `PostList.razor`에서 MudPagination + 페이지 크기 선택 (기본 20). 페이지/크기/검색어는 URL 쿼리(`page`/`size`/`q`)로 보존 — 뒤로가기/새로고침 시 상태 유지
 - **관리자 비밀번호 리셋**: 사용자 관리(UserList)에서 재설정 (`Components/Pages/Admin/Users/ResetPasswordDialog.razor`)
 
 ## 주요 라우팅
@@ -187,14 +201,14 @@ Serilog를 사용하여 콘솔 및 파일 로깅 (`Program.cs`):
 
 ### 에디터 및 파일 업로드
 - `Services/FileUploadService.cs` / `Controllers/FileUploadController.cs` - 이미지/동영상 업로드 로직
-- 파일 저장 경로: `wwwroot/uploads/posts/{postId}/` (런타임 생성물 — `.gitignore` 처리됨, `.gitkeep`으로 폴더만 보존)
+- 파일 저장 경로 (2단계): 컨트롤러는 `wwwroot/uploads/temp/`에 저장 → `FileUploadService.MoveToPostFolderAsync(tempUrl, postId)`로 `wwwroot/uploads/posts/{postId}/`에 이동. `FileUploadService.UploadFileAsync`는 postId 지정 시 posts 폴더에 직접 저장 가능 (`uploads/`는 런타임 생성물 — `.gitignore` 처리됨, `.gitkeep`으로 폴더만 보존)
 - 지원 형식: 이미지(jpg, jpeg, png, gif, webp - 최대 10MB), 동영상(mp4, webm - 최대 50MB)
-- **현재 비활성**: 본문 에디터가 평문이라 업로드를 호출하는 UI가 없음. 코드는 향후 재도입 대비로 보존(인증·매직넘버 검증 적용됨).
+- **현재 비활성**: 본문 에디터가 평문이라 업로드를 호출하는 UI가 없고, Attachment 레코드를 생성하는 코드도 없어 PostDetail의 첨부 표시 UI도 제거됨. 모델/서비스/컨트롤러는 향후 재도입 대비로 보존(인증·매직넘버 검증 적용됨).
 
 ### HTML 렌더링 (XSS 방어)
 게시글/댓글 본문은 평문 입력이므로, 출력 시 [Shared/HtmlContentHelper.cs](Monster.WebApp/Monster.WebApp/Shared/HtmlContentHelper.cs)의 `ToSafeHtml()`로 변환한 뒤 `@((MarkupString)...)`로 렌더링한다 (모든 HTML 특수문자 인코딩 + 줄바꿈→`<br>`). **사용자 입력을 정제 없이 `MarkupString`으로 직접 출력하지 말 것** — 저장형 XSS 위험.
 
 ## 에디터
 
-- **방식**: MudTextField (Lines="15") 사용하는 일반 텍스트 입력
-- **WYSIWYG 에디터**: Blazored.TextEditor (Quill.js)는 호환성 문제로 제거됨
+- **방식**: MudTextField (Lines="15") 사용하는 일반 텍스트 입력. 제목은 UI(MaxLength=200)와 서버 모델(StringLength(200)) 양쪽에서 길이 제한
+- **WYSIWYG 에디터**: Blazored.TextEditor (Quill.js)는 호환성 문제로 완전 제거됨 (패키지 참조·`@using`·CSS 잔재 포함)
