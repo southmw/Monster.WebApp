@@ -77,6 +77,8 @@ using var context = await _contextFactory.CreateDbContextAsync();
 
 - **.NET 8.0** - Blazor Server/WebAssembly 하이브리드
 - **MudBlazor 7.16.0** - Material Design UI 프레임워크
+- **Spillgebees.Blazor.RichTextEditor 2.2.0** - WYSIWYG 에디터 (Quill 2 기반, MIT)
+- **HtmlSanitizer 9.0.892** - 리치 에디터 HTML 새니타이징 (Ganss.Xss)
 - **Entity Framework Core 8.0.11** - SQL Server ORM
 - **BCrypt.Net-Next 4.0.3** - 비밀번호 해싱
 - **Serilog 9.0.0** - 로깅 (Console + File)
@@ -85,6 +87,7 @@ using var context = await _contextFactory.CreateDbContextAsync();
 
 - **방식**: ASP.NET Core Cookie Authentication (7일 세션, SlidingExpiration)
 - **쿠키 보안**(`Program.cs`): `HttpOnly=true`, `SameSite=Lax`, `SecurePolicy`는 개발=SameAsRequest / 프로덕션=Always
+- **쿠키 사용자 검증**(`OnValidatePrincipal`): 쿠키의 사용자 Id가 DB에 실재하고 `IsActive`인지 확인 (사용자별 5분 MemoryCache). 불일치 시 자동 로그아웃 — 다른 DB에서 발급된 스테일 쿠키(개발 중 연결 전환/DB 재생성)로 인한 FK 오류와 비활성화된 사용자의 세션 잔존을 방지. 비활성화는 최대 5분 내 반영
 - **역할**: Admin, SubAdmin, User
 - **정책**: AdminOnly, SubAdminOrHigher, AuthenticatedUser
 - **상수 정의**: 역할/정책 문자열은 [Shared/AppConstants.cs](Monster.WebApp/Monster.WebApp/Shared/AppConstants.cs)에 중앙 정의 (`AppConstants.Roles.*`, `AppConstants.Policies.*`). 하드코딩 금지.
@@ -102,7 +105,7 @@ using var context = await _contextFactory.CreateDbContextAsync();
 **API 엔드포인트** (`Controllers/`, Razor 컴포넌트와 별개의 MVC 컨트롤러):
 - `POST /api/auth/login`: 로그인 (`{username, password}`) — 쿠키 발급
 - `POST /api/auth/logout` / `GET /api/auth/logout`: 로그아웃
-- 파일 업로드: `Controllers/FileUploadController.cs` — `[Authorize]` 필수, 확장자 화이트리스트 + 파일 시그니처(매직넘버) 검증, 본문 한도 50MB. **현재 호출하는 UI가 없는 비활성 코드**(Quill 에디터 제거 잔재)이며 향후 이미지 업로드 재도입 대비로 보존.
+- 파일 업로드 API: `Controllers/FileUploadController.cs` — `[Authorize]` 필수, 확장자 화이트리스트 + 파일 시그니처(매직넘버) 검증(검증 로직은 `FileUploadService` 정적 메서드 공유), 본문 한도 50MB. 단, 에디터 미디어 업로드는 이 API가 아니라 Blazor 컴포넌트에서 `FileUploadService.UploadFileAsync`를 직접 호출함 — 이 API는 외부/비-Blazor 클라이언트용 보조 경로.
 
 ## UI 프레임워크 (MudBlazor 7.16.0)
 
@@ -151,6 +154,7 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 - **Auth**: User, Role, UserRole, CategoryAccess
 - **Board**: Category, Post, Comment, Attachment, PostVote
 - **댓글 중첩**: `Comment.ParentCommentId`(self-reference) + `Replies` 컬렉션으로 답글 트리 구성
+- **본문 형식**: `Post.IsHtml`/`Comment.IsHtml` — true면 새니타이즈된 HTML(리치 에디터), false면 레거시 평문. `Post.SearchText`는 태그 제거된 검색용 본문
 
 ### 시드 데이터 (`ApplicationDbContext.OnModelCreating`의 `HasData`)
 - 역할 3종(Admin/SubAdmin/User), 기본 카테고리 3개: 자유게시판(`free`), 질문게시판(`questions`), 정보공유(`info`)
@@ -167,9 +171,10 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 - **추천 중복 방지**: `PostVote` 모델로 투표 기록 저장 (로그인 사용자: UserId, 비로그인: IP 주소)
 - **공지 고정**: `Post.IsPinned`/`PinnedAt` 필드. `PostService.TogglePinAsync()`로 토글 (Admin/SubAdmin 권한). 목록 정렬은 공지글(PinnedAt 최신순) → 일반글(CreatedAt 최신순), 공지글은 상단에 보라색 배경 + "공지" 칩 표시
 - **카테고리 접근 제어**: `CategoryAccess` 모델 + `CategoryAccessService` (N+1 회피 위해 전체 로딩 후 메모리 필터링). **목록(PostList)·상세(PostDetail)·수정(PostEdit)·작성(PostWrite) 페이지 모두 `CanAccessCategoryAsync`/`CanWriteToCategoryAsync` 검증 필수** — 새 게시글 노출 경로를 추가할 때 반드시 포함할 것. 홈의 최근/인기 글은 완전 공개 카테고리(`IsPublic && !RequireAuth`)만 집계
-- **검색**: `/board/{slug}` 목록에서 지원
+- **검색**: `/board/{slug}` 목록에서 지원. HTML 글(`IsHtml=true`)은 태그 제거본(`Post.SearchText`)으로, 레거시 평문 글은 `Content`로 검색 (`(p.SearchText ?? p.Content).Contains(q)`)
 - **페이지네이션**: `PostList.razor`에서 MudPagination + 페이지 크기 선택 (기본 20). 페이지/크기/검색어는 URL 쿼리(`page`/`size`/`q`)로 보존 — 뒤로가기/새로고침 시 상태 유지
 - **관리자 비밀번호 리셋**: 사용자 관리(UserList)에서 재설정 (`Components/Pages/Admin/Users/ResetPasswordDialog.razor`)
+- **익명 글 수정 비밀번호 전달**: PostDetail → PostEdit 이동 시 비밀번호를 `Services/Board/PostEditVerificationState`(서킷 범위 scoped, 1회 소비)로 전달. **URL 쿼리로 비밀번호를 전달하지 말 것** (브라우저 히스토리/로그 노출). 수정 페이지 직접 진입/새로고침 시에는 상세 페이지에서 다시 비밀번호 확인 필요
 
 ## 주요 라우팅
 
@@ -199,16 +204,34 @@ Serilog를 사용하여 콘솔 및 파일 로깅 (`Program.cs`):
 
 ## 주요 컴포넌트 및 파일
 
-### 에디터 및 파일 업로드
-- `Services/FileUploadService.cs` / `Controllers/FileUploadController.cs` - 이미지/동영상 업로드 로직
-- 파일 저장 경로 (2단계): 컨트롤러는 `wwwroot/uploads/temp/`에 저장 → `FileUploadService.MoveToPostFolderAsync(tempUrl, postId)`로 `wwwroot/uploads/posts/{postId}/`에 이동. `FileUploadService.UploadFileAsync`는 postId 지정 시 posts 폴더에 직접 저장 가능 (`uploads/`는 런타임 생성물 — `.gitignore` 처리됨, `.gitkeep`으로 폴더만 보존)
-- 지원 형식: 이미지(jpg, jpeg, png, gif, webp - 최대 10MB), 동영상(mp4, webm - 최대 50MB)
-- **현재 비활성**: 본문 에디터가 평문이라 업로드를 호출하는 UI가 없고, Attachment 레코드를 생성하는 코드도 없어 PostDetail의 첨부 표시 UI도 제거됨. 모델/서비스/컨트롤러는 향후 재도입 대비로 보존(인증·매직넘버 검증 적용됨).
+### 미디어 첨부 (에디터)
+- **이미지 = 파일 업로드 (로그인 사용자 전용)**: 게시글 툴바의 이미지 버튼 사용. `ShowInsertImageControls = isAuthenticated`로 익명에겐 버튼 미노출. Quill 기본 핸들러(base64 본문 삽입)는 `wwwroot/js/editor-media.js`의 `monsterEditor.registerImageHandler(containerId)`가 서버 업로드 방식으로 교체 — `OnAfterRenderAsync`(에디터 렌더링 후 1회)에서 등록, 에디터 초기화가 비동기라 JS 내부에서 폴링으로 인스턴스 대기. 업로드는 `POST /api/fileupload`(쿠키 인증 자동 전송, `[Authorize]`, **이미지 전용** — jpg/png/gif/webp 10MB) 경유
+- **동영상 = URL 링크 임베드 (파일 업로드 미지원)**: 게시글 툴바의 동영상 버튼(`ShowEmbedVideoControls=true`, Quill 기본 핸들러) — YouTube/Vimeo 링크를 입력하면 Quill이 임베드 URL로 변환해 `<iframe class="ql-video">`로 삽입. 새니타이저가 신뢰 임베드 URL(`youtube.com/embed/`, `youtube-nocookie.com/embed/`, `player.vimeo.com/video/`)만 허용 — 그 외 iframe(`/uploads/` 포함)은 노드째 제거. 허용 도메인 추가 시 `ContentSanitizer.AllowedIframeSrcPrefixes` + 테스트 갱신
+- **댓글도 동일 정책**: 댓글/답글/수정 에디터 툴바에 이미지(로그인 전용)·동영상(링크) 버튼 제공. 답글/수정 폼은 열릴 때마다 새 Quill 인스턴스가 생기므로 이미지 핸들러 등록 플래그를 `ShowReplyForm`/`StartEditComment`에서 리셋 후 `OnAfterRenderAsync`에서 재등록 (에디터 id: `comment-editor-main`/`-reply`/`-edit`)
+- 업로드 검증: 확장자 화이트리스트 + 크기(10MB) + 파일 시그니처(매직넘버 — `FileUploadService.IsValidFileSignature*` 정적 메서드). 요청 본문 한도는 Kestrel/FormOptions 15MB
+- 파일 저장 경로 (2단계): 업로드 시 `wwwroot/uploads/temp/` → 저장 시 `FileUploadService.MoveContentTempMediaAsync(content, postId)`가 본문 내 `/uploads/temp/` URL을 수집해 `wwwroot/uploads/posts/{postId}/`로 이동·치환 (PostService·CommentService 공용. **댓글 이미지도 부모 게시글 폴더 사용** — 게시글 삭제 시 댓글이 Cascade 삭제되므로 수명 일치. `uploads/`는 런타임 생성물 — `.gitignore` 처리, `.gitkeep`으로 폴더만 보존)
+- **알려진 한계**: 저장하지 않고 이탈하면 temp 고아 이미지 잔류 (추후 청소 배치 과제), 붙여넣은 base64/외부 이미지는 저장 시 새니타이저가 노드째 제거
+- Attachment 모델/테이블은 존재하나 생성 경로 없음 (본문 임베드 방식 사용 — 별도 첨부 목록 UI 없음)
 
 ### HTML 렌더링 (XSS 방어)
-게시글/댓글 본문은 평문 입력이므로, 출력 시 [Shared/HtmlContentHelper.cs](Monster.WebApp/Monster.WebApp/Shared/HtmlContentHelper.cs)의 `ToSafeHtml()`로 변환한 뒤 `@((MarkupString)...)`로 렌더링한다 (모든 HTML 특수문자 인코딩 + 줄바꿈→`<br>`). **사용자 입력을 정제 없이 `MarkupString`으로 직접 출력하지 말 것** — 저장형 XSS 위험.
+- **저장 시 새니타이즈 계약**: 게시글/댓글 본문(HTML)은 PostService/CommentService의 Create/Update에서 [Shared/ContentSanitizer.cs](Monster.WebApp/Monster.WebApp/Shared/ContentSanitizer.cs) `Sanitize()`를 거쳐 저장되고 `IsHtml=true`로 마킹된다. 쓰기 경로를 추가할 때 반드시 이 새니타이즈를 포함할 것.
+- **출력**: [Shared/HtmlContentHelper.cs](Monster.WebApp/Monster.WebApp/Shared/HtmlContentHelper.cs)의 `ToDisplayHtml(content, isHtml)` 사용 — `IsHtml=true`면 그대로(이미 정제됨), 레거시 평문(`IsHtml=false`)이면 `ToSafeHtml()`(전체 인코딩 + 줄바꿈→`<br>`) 경유. **새니타이즈를 거치지 않은 사용자 입력을 `MarkupString`으로 직접 출력하지 말 것** — 저장형 XSS 위험.
+- **화이트리스트** (ContentSanitizer — 에디터 툴바 구성과 정합 유지, 변경 시 ContentSanitizerTests 함께 갱신):
+  - 태그: p, br, strong, em, u, s, h1-h3, ol, ul, li, a, img, iframe, blockquote, pre, code, span, div
+  - `img` src는 `/uploads/` 상대경로만 허용 (외부 핫링크·data: base64 차단). `iframe` src는 `/uploads/` + YouTube/Vimeo 임베드 URL만 허용(`AllowedIframeSrcPrefixes`), 그 외 iframe은 노드 자체 제거
+  - class는 `ql-*` 화이트리스트만, 인라인 style 전면 차단, 스킴은 http/https만
+- 본문 길이 상한: `AppConstants.ContentLimits` (게시글 100,000자 / 댓글 20,000자) — 서비스에서 새니타이즈 전 검사 + UI 제출 전 검사
+- **빈 본문 차단**: 서비스에서 새니타이즈 **후** `IsEmptyHtml` 재검증 (외부 이미지만 넣은 글이 새니타이즈로 비게 되는 케이스 — UI의 사전 검사는 새니타이즈 전이라 못 거름). 위반 시 `ArgumentException` → 컴포넌트 catch가 Snackbar 표시
 
-## 에디터
+## 에디터 (WYSIWYG)
 
-- **방식**: MudTextField (Lines="15") 사용하는 일반 텍스트 입력. 제목은 UI(MaxLength=200)와 서버 모델(StringLength(200)) 양쪽에서 길이 제한
-- **WYSIWYG 에디터**: Blazored.TextEditor (Quill.js)는 호환성 문제로 완전 제거됨 (패키지 참조·`@using`·CSS 잔재 포함)
+- **컴포넌트**: `RichTextEditor` (Spillgebees.Blazor.RichTextEditor 2.2.0, Quill 2 기반). CSS는 App.razor head의 `_content/Spillgebees.Blazor.RichTextEditor/...lib.module.css`, JS는 Blazor JS Initializer로 자동 로드
+- **적용 위치**: PostWrite/PostEdit(전체 툴바 + 미디어 버튼), PostDetail 댓글/답글/수정 폼 4곳(축소 툴바: Style/List/Link + 이미지(로그인 전용)/동영상 링크)
+- **필수 패턴**:
+  - 제출 시 반드시 `@ref` + `await _editor.GetContentAsync()` 사용 — `@bind-Content`는 디바운스가 있어 마지막 입력이 유실될 수 있음
+  - 빈 값 검사는 `HtmlContentHelper.IsEmptyHtml()` 사용 (Quill 빈 값 = `<p><br></p>`, 미디어만 있는 본문은 유효 취급)
+  - **프리렌더링 게이트**: 에디터는 `_isInteractive` 플래그(OnAfterRender(firstRender)에서 true)로 감싸 인터랙티브 전환 후에만 렌더링 — 정적 렌더 단계의 JS interop dispose 오류 방지. 프리렌더 중에는 MudSkeleton 표시
+  - 레거시 평문 글을 에디터에 로드할 때는 `IsHtml=false`면 `ToSafeHtml()` 변환 후 주입 (특수문자·줄바꿈 보존). 수정 저장 시 IsHtml=true로 자연 전환됨
+  - `ShowInsertImageControls`는 로그인 사용자에게만 true이며 **반드시 `registerImageHandler`로 기본 핸들러를 교체할 것** (기본 동작은 base64 본문 삽입 → 저장 시 새니타이저가 제거해 이미지 유실). `ShowEmbedVideoControls`는 true(링크 임베드) — 새니타이저의 iframe 허용 목록과 정합
+  - 툴바 옵션 추가 시 ContentSanitizer 화이트리스트와 정합 확인 (예: 색상 버튼 추가 → style/class 허용 필요 → XSS 검토)
+- **과거 이력**: Blazored.TextEditor(구형 Quill 1.3.6)는 호환성 문제로 제거됐던 이력 있음 — 재도입 금지

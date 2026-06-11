@@ -2,12 +2,15 @@
 @using Monster.WebApp.Services
 @using Monster.WebApp.Services.Auth
 @using Monster.WebApp.Models
+@using Monster.WebApp.Shared
 @inject CategoryService CategoryService
 @inject PostService PostService
 @inject AuthService AuthService
 @inject CategoryAccessService CategoryAccessService
+@inject PostEditVerificationState EditVerificationState
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
+@inject IJSRuntime JS
 @rendermode InteractiveServer
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
@@ -52,10 +55,27 @@
                               Class="compact-input" Margin="Margin.Dense" />
             </div>
 
+            @* translate="no": Google 페이지 번역이 Quill의 DOM을 조작해 에디터/Blazor 렌더링이 깨지는 것 방지 *@
+            <div class="form-section post-editor" translate="no">
+                @if (_isInteractive)
+                {
+                    <RichTextEditor @ref="_editor"
+                                    @bind-Content="_content"
+                                    Placeholder="내용을 입력하세요..."
+                                    Theme="QuillTheme.Snow"
+                                    EditorContainerHtmlId="post-editor"
+                                    ToolbarOptions="@_toolbarOptions" />
+                }
+                else
+                {
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="364px" />
+                }
+            </div>
+
             <div class="form-section">
-                <MudTextField @bind-Value="_content" Label="내용" Variant="Variant.Outlined"
-                              Required="true" FullWidth="true" Lines="15"
-                              Placeholder="내용을 입력하세요..." Class="compact-input" Margin="Margin.Dense" />
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    @(_isAuthenticated ? "이미지는 툴바의 이미지 버튼으로 업로드합니다 (최대 10MB, jpg/png/gif/webp). " : "")동영상은 툴바의 동영상 버튼으로 YouTube/Vimeo 링크를 입력해 첨부합니다. 외부 사이트 이미지를 붙여넣으면 저장 시 제거됩니다.
+                </MudText>
             </div>
 
             <MudButtonGroup Size="Size.Medium" Style="margin-top: 16px;">
@@ -81,9 +101,6 @@
     [Parameter]
     public int PostId { get; set; }
 
-    [SupplyParameterFromQuery(Name = "verify")]
-    public string? VerifyPassword { get; set; }
-
     private Post? _post;
     private string _title = string.Empty;
     private string _content = string.Empty;
@@ -93,10 +110,35 @@
     private bool _canEdit = false;
     private string _errorMessage = string.Empty;
     private int? _currentUserId;
+    private bool _isAuthenticated = false;
+    private RichTextEditor? _editor;
+    // 프리렌더링 중에는 에디터를 렌더링하지 않음 (정적 렌더 단계의 JS interop dispose 오류 방지)
+    private bool _isInteractive = false;
+    private bool _imageHandlerRegistered = false;
+
+    // PostWrite와 동일 구성 — 새니타이저 화이트리스트와 정합 유지.
+    // 이미지 버튼은 로그인 사용자 전용(핸들러는 registerImageHandler가 업로드 방식으로 교체),
+    // 동영상 버튼은 Quill 기본 URL 임베드(링크 첨부)
+    private ToolbarOptions _toolbarOptions = new();
 
     protected override async Task OnInitializedAsync()
     {
         _currentUserId = AuthService.GetCurrentUserId();
+        _isAuthenticated = AuthService.IsAuthenticated();
+
+        _toolbarOptions = new ToolbarOptions
+        {
+            ShowStyleControls = true,
+            ShowHeaderControls = true,
+            ShowListControls = true,
+            ShowQuotationControls = true,
+            ShowCodeBlockControls = true,
+            ShowHypertextLinkControls = true,
+            ShowInsertImageControls = _isAuthenticated, // 이미지 업로드는 로그인 사용자 전용
+            ShowEmbedVideoControls = true,              // 동영상은 링크 임베드 — 모든 작성자 허용
+            ShowCleanFormattingControls = true
+        };
+
         _post = await PostService.GetPostByIdAsync(PostId);
 
         if (_post == null)
@@ -117,25 +159,24 @@
         // 권한 체크
         if (_post.UserId == null)
         {
-            // 익명 게시글 - 비밀번호 검증 필요
-            if (string.IsNullOrEmpty(VerifyPassword))
+            // 익명 게시글 - PostDetail에서 서킷 범위 상태로 전달된 비밀번호를 1회 소비
+            // (URL 쿼리 전달 금지 — 브라우저 히스토리/로그 노출 방지)
+            _password = EditVerificationState.Consume(PostId);
+
+            if (string.IsNullOrEmpty(_password))
             {
+                // 직접 URL 진입 또는 새로고침 — 상세 페이지에서 다시 비밀번호 확인 필요
                 _canEdit = false;
-                _errorMessage = "비밀번호 확인이 필요합니다.";
+                _errorMessage = "비밀번호 확인이 필요합니다. 게시글에서 수정 버튼을 이용해주세요.";
+            }
+            else if (_post.AuthorPassword != null && BCrypt.Net.BCrypt.Verify(_password, _post.AuthorPassword))
+            {
+                _canEdit = true;
             }
             else
             {
-                // 비밀번호 검증
-                _password = Uri.UnescapeDataString(VerifyPassword);
-                if (_post.AuthorPassword != null && BCrypt.Net.BCrypt.Verify(_password, _post.AuthorPassword))
-                {
-                    _canEdit = true;
-                }
-                else
-                {
-                    _canEdit = false;
-                    _errorMessage = "비밀번호가 일치하지 않습니다.";
-                }
+                _canEdit = false;
+                _errorMessage = "비밀번호가 일치하지 않습니다.";
             }
         }
         else
@@ -155,10 +196,30 @@
         if (_canEdit)
         {
             _title = _post.Title;
-            _content = _post.Content;
+            // 레거시 평문 글은 에디터에 그대로 넣으면 특수문자·줄바꿈이 깨지므로
+            // 인코딩+<br> 변환된 HTML로 주입 (저장 시 IsHtml=true로 자연 전환됨)
+            _content = _post.IsHtml ? _post.Content : HtmlContentHelper.ToSafeHtml(_post.Content);
         }
 
         _isLoading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // OnAfterRender는 인터랙티브 서킷에서만 실행됨 — 이 시점부터 에디터 렌더링
+            _isInteractive = true;
+            StateHasChanged();
+            return;
+        }
+
+        // 에디터 렌더링 이후 1회: 툴바 이미지 버튼의 기본 핸들러(base64)를 서버 업로드로 교체
+        if (_isInteractive && _isAuthenticated && _canEdit && !_imageHandlerRegistered)
+        {
+            _imageHandlerRegistered = true;
+            await JS.InvokeVoidAsync("monsterEditor.registerImageHandler", "post-editor");
+        }
     }
 
     private async Task UpdatePost()
@@ -175,9 +236,21 @@
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_content))
+        // @bind-Content는 디바운스가 있어 마지막 입력이 유실될 수 있음 — 제출 시점에 직접 조회
+        if (_editor != null)
+        {
+            _content = await _editor.GetContentAsync();
+        }
+
+        if (HtmlContentHelper.IsEmptyHtml(_content))
         {
             Snackbar.Add("내용을 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        if (_content.Length > AppConstants.ContentLimits.PostMaxLength)
+        {
+            Snackbar.Add($"본문이 너무 깁니다. (최대 {AppConstants.ContentLimits.PostMaxLength:N0}자)", Severity.Warning);
             return;
         }
 

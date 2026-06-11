@@ -1,12 +1,14 @@
 @page "/board/{categoryUrl}/write"
 @using Monster.WebApp.Services
 @using Monster.WebApp.Models
+@using Monster.WebApp.Shared
 @inject CategoryService CategoryService
 @inject PostService PostService
 @inject CategoryAccessService CategoryAccessService
 @inject AuthService AuthService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
+@inject IJSRuntime JS
 @rendermode InteractiveServer
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
@@ -64,10 +66,27 @@
                 </MudGrid>
             }
 
+            @* translate="no": Google 페이지 번역이 Quill의 DOM을 조작해 에디터/Blazor 렌더링이 깨지는 것 방지 *@
+            <div class="form-section post-editor" translate="no">
+                @if (_isInteractive)
+                {
+                    <RichTextEditor @ref="_editor"
+                                    @bind-Content="content"
+                                    Placeholder="내용을 입력하세요..."
+                                    Theme="QuillTheme.Snow"
+                                    EditorContainerHtmlId="post-editor"
+                                    ToolbarOptions="@_toolbarOptions" />
+                }
+                else
+                {
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="364px" />
+                }
+            </div>
+
             <div class="form-section">
-                <MudTextField @bind-Value="content" Label="내용" Variant="Variant.Outlined"
-                              Required="true" FullWidth="true" Lines="15"
-                              Placeholder="내용을 입력하세요..." Class="compact-input" Margin="Margin.Dense" />
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    @(isAuthenticated ? "이미지는 툴바의 이미지 버튼으로 업로드합니다 (최대 10MB, jpg/png/gif/webp). " : "")동영상은 툴바의 동영상 버튼으로 YouTube/Vimeo 링크를 입력해 첨부합니다. 외부 사이트 이미지를 붙여넣으면 저장 시 제거됩니다.
+                </MudText>
             </div>
 
             @if (_isSubAdminOrHigher)
@@ -108,6 +127,15 @@
     private bool isPinned = false;
     private bool _isSubAdminOrHigher = false;
     private User? currentUser;
+    private RichTextEditor? _editor;
+    // 프리렌더링 중에는 에디터를 렌더링하지 않음 (정적 렌더 단계의 JS interop dispose 오류 방지)
+    private bool _isInteractive = false;
+    private bool _imageHandlerRegistered = false;
+
+    // 새니타이저(ContentSanitizer) 화이트리스트와 정합 — Font/Size/Color/Align 금지.
+    // 이미지 버튼: 로그인 사용자만, 기본 핸들러(base64 삽입)는 registerImageHandler가 업로드 방식으로 교체.
+    // 동영상 버튼: Quill 기본 URL 임베드(링크 첨부) — 새니타이저가 YouTube/Vimeo 임베드만 허용
+    private ToolbarOptions _toolbarOptions = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -133,6 +161,37 @@
                 authorNickname = currentUser.DisplayName; // Pre-fill for authenticated users
             }
         }
+
+        _toolbarOptions = new ToolbarOptions
+        {
+            ShowStyleControls = true,
+            ShowHeaderControls = true,
+            ShowListControls = true,
+            ShowQuotationControls = true,
+            ShowCodeBlockControls = true,
+            ShowHypertextLinkControls = true,
+            ShowInsertImageControls = isAuthenticated, // 이미지 업로드는 로그인 사용자 전용
+            ShowEmbedVideoControls = true,             // 동영상은 링크 임베드 — 모든 작성자 허용
+            ShowCleanFormattingControls = true
+        };
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // OnAfterRender는 인터랙티브 서킷에서만 실행됨 — 이 시점부터 에디터 렌더링
+            _isInteractive = true;
+            StateHasChanged();
+            return;
+        }
+
+        // 에디터 렌더링 이후 1회: 툴바 이미지 버튼의 기본 핸들러(base64)를 서버 업로드로 교체
+        if (_isInteractive && isAuthenticated && canWrite && !_imageHandlerRegistered)
+        {
+            _imageHandlerRegistered = true;
+            await JS.InvokeVoidAsync("monsterEditor.registerImageHandler", "post-editor");
+        }
     }
 
     private async Task SubmitPost()
@@ -149,9 +208,21 @@
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(content))
+        // @bind-Content는 디바운스가 있어 마지막 입력이 유실될 수 있음 — 제출 시점에 직접 조회
+        if (_editor != null)
+        {
+            content = await _editor.GetContentAsync();
+        }
+
+        if (HtmlContentHelper.IsEmptyHtml(content))
         {
             Snackbar.Add("내용을 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        if (content.Length > AppConstants.ContentLimits.PostMaxLength)
+        {
+            Snackbar.Add($"본문이 너무 깁니다. (최대 {AppConstants.ContentLimits.PostMaxLength:N0}자)", Severity.Warning);
             return;
         }
 

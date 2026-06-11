@@ -285,3 +285,90 @@
 .mud-theme-dark .post-html-content a {
     color: #818cf8;
 }
+
+/* ===== Rich Text Editor (Quill 2 / Spillgebees) ===== */
+
+/* Quill 2 출력 표시 보정: 목록은 <ol><li data-list="...">로 출력됨 */
+.post-html-content li[data-list="bullet"],
+.comment-html-content li[data-list="bullet"] {
+    list-style-type: disc;
+}
+
+.post-html-content span.ql-ui,
+.comment-html-content span.ql-ui {
+    display: none;
+}
+
+.post-html-content .ql-code-block-container,
+.comment-html-content .ql-code-block-container {
+    background: #f5f5f5;
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-family: Consolas, Monaco, monospace;
+    font-size: 14px;
+}
+
+.mud-theme-dark .post-html-content .ql-code-block-container,
+.mud-theme-dark .comment-html-content .ql-code-block-container {
+    background: #1e293b;
+}
+
+.post-html-content img,
+.comment-html-content img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* 동영상 링크 임베드 — YouTube/Vimeo (Quill video 임베드 = iframe.ql-video)
+   .ql-editor: 에디터 내부 미리보기 (미지정 시 브라우저 기본 300x150으로 작게 표시됨) */
+.post-html-content iframe.ql-video,
+.comment-html-content iframe.ql-video,
+.ql-editor iframe.ql-video {
+    display: block;
+    width: 100%;
+    max-width: 720px;
+    aspect-ratio: 16 / 9;
+    border: 0;
+}
+
+/* 댓글 에디터는 높이 축소 */
+.comment-editor .ql-editor {
+    min-height: 80px;
+}
+
+/* 게시글 에디터 기본 높이 */
+.post-editor .ql-editor {
+    min-height: 320px;
+}
+
+/* Quill Editor Dark Mode Support */
+.mud-theme-dark .ql-toolbar {
+    background-color: #1e293b;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.mud-theme-dark .ql-container {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.mud-theme-dark .ql-editor {
+    background-color: #0f172a;
+    color: #e2e8f0;
+}
+
+.mud-theme-dark .ql-toolbar .ql-stroke {
+    stroke: #94a3b8;
+}
+
+.mud-theme-dark .ql-toolbar .ql-fill {
+    fill: #94a3b8;
+}
+
+.mud-theme-dark .ql-toolbar .ql-picker {
+    color: #94a3b8;
+}
+
+.mud-theme-dark .ql-editor.ql-blank::before {
+    color: #64748b;
+}

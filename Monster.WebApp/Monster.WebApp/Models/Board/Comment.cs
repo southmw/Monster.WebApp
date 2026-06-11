@@ -16,6 +16,12 @@ public class Comment
     [Required]
     public string Content { get; set; } = string.Empty;
 
+    /// <summary>
+    /// true면 Content가 저장 시 새니타이즈된 HTML(리치 에디터 작성),
+    /// false면 레거시 평문 (출력 시 HtmlContentHelper.ToSafeHtml로 인코딩)
+    /// </summary>
+    public bool IsHtml { get; set; } = false;
+
     [Required]
     [StringLength(50)]
     public string AuthorNickname { get; set; } = string.Empty;

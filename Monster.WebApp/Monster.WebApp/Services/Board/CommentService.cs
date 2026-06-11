@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Monster.WebApp.Data;
 using Monster.WebApp.Models.Board;
 using Monster.WebApp.Services.Auth;
+using Monster.WebApp.Shared;
 
 namespace Monster.WebApp.Services.Board;
 
@@ -9,11 +10,19 @@ public class CommentService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly AuthService _authService;
+    private readonly ContentSanitizer _contentSanitizer;
+    private readonly FileUploadService _fileUploadService;
 
-    public CommentService(IDbContextFactory<ApplicationDbContext> contextFactory, AuthService authService)
+    public CommentService(
+        IDbContextFactory<ApplicationDbContext> contextFactory,
+        AuthService authService,
+        ContentSanitizer contentSanitizer,
+        FileUploadService fileUploadService)
     {
         _contextFactory = contextFactory;
         _authService = authService;
+        _contentSanitizer = contentSanitizer;
+        _fileUploadService = fileUploadService;
     }
 
     public async Task<List<Comment>> GetCommentsByPostIdAsync(int postId)
@@ -28,6 +37,9 @@ public class CommentService
 
     public async Task<Comment> CreateCommentAsync(Comment comment, string? password = null)
     {
+        if (comment.Content.Length > AppConstants.ContentLimits.CommentMaxLength)
+            throw new ArgumentException($"댓글이 허용 길이를 초과했습니다. (최대 {AppConstants.ContentLimits.CommentMaxLength:N0}자)");
+
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         // Set UserId if user is authenticated
@@ -47,6 +59,17 @@ public class CommentService
             comment.AuthorPassword = BCrypt.Net.BCrypt.HashPassword(password);
         }
 
+        // 리치 에디터 HTML — 저장 시 새니타이즈 (XSS 차단 단일 지점)
+        comment.Content = _contentSanitizer.Sanitize(comment.Content);
+
+        // 새니타이즈로 본문이 비게 된 경우 차단 (UI 검사는 새니타이즈 전)
+        if (HtmlContentHelper.IsEmptyHtml(comment.Content))
+            throw new ArgumentException("댓글 내용이 비어 있습니다. (외부 이미지/임베드는 저장 시 제거됩니다)");
+
+        // 댓글에 삽입된 임시 이미지를 부모 게시글 폴더로 이동 (PostId는 호출 측에서 설정됨)
+        comment.Content = await _fileUploadService.MoveContentTempMediaAsync(comment.Content, comment.PostId);
+
+        comment.IsHtml = true;
         comment.CreatedAt = DateTime.UtcNow;
 
         context.Comments.Add(comment);
@@ -57,6 +80,9 @@ public class CommentService
 
     public async Task<bool> UpdateCommentAsync(int id, string content, string? password = null)
     {
+        if (content.Length > AppConstants.ContentLimits.CommentMaxLength)
+            throw new ArgumentException($"댓글이 허용 길이를 초과했습니다. (최대 {AppConstants.ContentLimits.CommentMaxLength:N0}자)");
+
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         var comment = await context.Comments.FindAsync(id);
@@ -66,7 +92,16 @@ public class CommentService
         if (!_authService.CanModifyContent(comment.UserId, comment.AuthorPassword, password))
             return false;
 
-        comment.Content = content;
+        var sanitized = _contentSanitizer.Sanitize(content);
+
+        if (HtmlContentHelper.IsEmptyHtml(sanitized))
+            throw new ArgumentException("댓글 내용이 비어 있습니다. (외부 이미지/임베드는 저장 시 제거됩니다)");
+
+        // 수정 중 새로 삽입된 임시 이미지를 부모 게시글 폴더로 이동
+        sanitized = await _fileUploadService.MoveContentTempMediaAsync(sanitized, comment.PostId);
+
+        comment.Content = sanitized;
+        comment.IsHtml = true;
         comment.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();

@@ -8,10 +8,12 @@
 @inject CommentService CommentService
 @inject AuthService AuthService
 @inject CategoryAccessService CategoryAccessService
+@inject PostEditVerificationState EditVerificationState
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject ILogger<PostDetail> Logger
+@inject IJSRuntime JS
 @rendermode InteractiveServer
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
@@ -90,7 +92,7 @@
                 </MudText>
             </div>
             <div class="post-html-content" style="line-height: 1.8; font-size: 15px;">
-                @((MarkupString)HtmlContentHelper.ToSafeHtml(post.Content))
+                @((MarkupString)HtmlContentHelper.ToDisplayHtml(post.Content, post.IsHtml))
             </div>
         </div>
 
@@ -141,8 +143,26 @@
                         </MudItem>
                     }
                     <MudItem xs="12">
-                        <MudTextField @bind-Value="commentContent" Label="댓글 내용" Variant="Variant.Outlined"
-                                      Lines="3" Class="compact-input" Margin="Margin.Dense" />
+                        <div class="comment-editor" translate="no">
+                            @if (_isInteractive)
+                            {
+                                <RichTextEditor @ref="_commentEditor"
+                                                @bind-Content="commentContent"
+                                                Placeholder="댓글 내용을 입력하세요..."
+                                                Theme="QuillTheme.Snow"
+                                                EditorContainerHtmlId="comment-editor-main"
+                                                ToolbarOptions="@_commentToolbarOptions" />
+                            }
+                            else
+                            {
+                                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="124px" />
+                            }
+                        </div>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            @(IsLoggedIn ? "이미지는 툴바 버튼으로 업로드합니다 (최대 10MB). " : "")동영상은 툴바 버튼으로 YouTube/Vimeo 링크를 첨부합니다.
+                        </MudText>
                     </MudItem>
                     <MudItem xs="12">
                         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Medium"
@@ -178,8 +198,14 @@
                     @if (editingCommentId == comment.Id)
                     {
                         <div style="margin-top: 12px;">
-                            <MudTextField @bind-Value="editCommentContent" Label="댓글 수정" Variant="Variant.Outlined"
-                                          Lines="3" Class="compact-input" Margin="Margin.Dense" />
+                            <div class="comment-editor" translate="no">
+                                <RichTextEditor @ref="_editCommentEditor"
+                                                @bind-Content="editCommentContent"
+                                                Placeholder="댓글 수정..."
+                                                Theme="QuillTheme.Snow"
+                                                EditorContainerHtmlId="comment-editor-edit"
+                                                ToolbarOptions="@_commentToolbarOptions" />
+                            </div>
                             <MudStack Row="true" Spacing="1" Class="mt-2">
                                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
                                            OnClick="SaveEditComment">저장</MudButton>
@@ -191,7 +217,7 @@
                     else
                     {
                         <div class="comment-html-content" style="margin-top: 12px; line-height: 1.6;">
-                            @((MarkupString)HtmlContentHelper.ToSafeHtml(comment.Content))
+                            @((MarkupString)HtmlContentHelper.ToDisplayHtml(comment.Content, comment.IsHtml))
                         </div>
                     }
 
@@ -219,8 +245,14 @@
                                     </MudItem>
                                 }
                                 <MudItem xs="12">
-                                    <MudTextField @bind-Value="replyContent" Label="답글 내용" Variant="Variant.Outlined"
-                                                  Lines="2" Class="compact-input" Margin="Margin.Dense" />
+                                    <div class="comment-editor" translate="no">
+                                        <RichTextEditor @ref="_replyEditor"
+                                                        @bind-Content="replyContent"
+                                                        Placeholder="답글 내용을 입력하세요..."
+                                                        Theme="QuillTheme.Snow"
+                                                        EditorContainerHtmlId="comment-editor-reply"
+                                                        ToolbarOptions="@_commentToolbarOptions" />
+                                    </div>
                                 </MudItem>
                                 <MudItem xs="12">
                                     <MudButtonGroup Size="Size.Small">
@@ -263,8 +295,14 @@
                             @if (editingCommentId == reply.Id)
                             {
                                 <div style="margin-top: 8px;">
-                                    <MudTextField @bind-Value="editCommentContent" Label="답글 수정" Variant="Variant.Outlined"
-                                                  Lines="2" Class="compact-input" Margin="Margin.Dense" />
+                                    <div class="comment-editor" translate="no">
+                                        <RichTextEditor @ref="_editCommentEditor"
+                                                        @bind-Content="editCommentContent"
+                                                        Placeholder="답글 수정..."
+                                                        Theme="QuillTheme.Snow"
+                                                        EditorContainerHtmlId="comment-editor-edit"
+                                                        ToolbarOptions="@_commentToolbarOptions" />
+                                    </div>
                                     <MudStack Row="true" Spacing="1" Class="mt-2">
                                         <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
                                                    OnClick="SaveEditComment">저장</MudButton>
@@ -276,7 +314,7 @@
                             else
                             {
                                 <div class="comment-html-content" style="margin-top: 8px; line-height: 1.6; font-size: 14px;">
-                                    @((MarkupString)HtmlContentHelper.ToSafeHtml(reply.Content))
+                                    @((MarkupString)HtmlContentHelper.ToDisplayHtml(reply.Content, reply.IsHtml))
                                 </div>
                             }
                         </div>
@@ -301,6 +339,8 @@
     private bool _isLoading = true;
     private bool _loadFailed = false;
     private bool hasAccess = false;
+    // 프리렌더링 중에는 댓글 에디터를 렌더링하지 않음 (정적 렌더 단계의 JS interop dispose 오류 방지)
+    private bool _isInteractive = false;
     private bool IsLoggedIn => _currentUserId != null;
 
     // Comment fields
@@ -321,6 +361,26 @@
     private string editCommentContent = string.Empty;
     private string? editCommentPassword = null;
 
+    // Rich text editors (수정/답글 폼은 상태 변수로 동시에 1개만 렌더링되므로 @ref 충돌 없음)
+    private RichTextEditor? _commentEditor;
+    private RichTextEditor? _replyEditor;
+    private RichTextEditor? _editCommentEditor;
+
+    // 이미지 핸들러 등록 추적 — 답글/수정 폼은 열릴 때마다 새 Quill 인스턴스가 생기므로
+    // ShowReplyForm/StartEditComment에서 리셋 후 OnAfterRenderAsync에서 재등록
+    private bool _commentHandlerRegistered = false;
+    private bool _replyHandlerRegistered = false;
+    private bool _editHandlerRegistered = false;
+
+    // 댓글용 축소 툴바 — 새니타이저 화이트리스트와 정합.
+    // 이미지(로그인 전용)/동영상(링크 임베드) 버튼은 OnAfterRender에서 권한 확인 후 구성
+    private ToolbarOptions _commentToolbarOptions = new()
+    {
+        ShowStyleControls = true,
+        ShowListControls = true,
+        ShowHypertextLinkControls = true
+    };
+
     protected override async Task OnInitializedAsync()
     {
         _currentUserId = AuthService.GetCurrentUserId();
@@ -329,22 +389,53 @@
         await LoadPostAsync(incrementViewCount: true);
     }
 
-    protected override void OnAfterRender(bool firstRender)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            // Prerendering 후 클라이언트에서 권한 재확인
-            var currentUserId = AuthService.GetCurrentUserId();
-            var isAdmin = AuthService.IsAdmin();
-            var isSubAdminOrHigher = AuthService.IsSubAdminOrHigher();
+            // OnAfterRender는 인터랙티브 서킷에서만 실행됨 — 이 시점부터 댓글 에디터 렌더링
+            _isInteractive = true;
 
-            if (_currentUserId != currentUserId || _isAdmin != isAdmin || _isSubAdminOrHigher != isSubAdminOrHigher)
+            // Prerendering 후 클라이언트에서 권한 재확인
+            _currentUserId = AuthService.GetCurrentUserId();
+            _isAdmin = AuthService.IsAdmin();
+            _isSubAdminOrHigher = AuthService.IsSubAdminOrHigher();
+
+            // 권한 확정 후 댓글 툴바 구성 — 이미지 업로드는 로그인 전용, 동영상은 링크 임베드(전체 허용)
+            _commentToolbarOptions = new ToolbarOptions
             {
-                _currentUserId = currentUserId;
-                _isAdmin = isAdmin;
-                _isSubAdminOrHigher = isSubAdminOrHigher;
-                StateHasChanged();
-            }
+                ShowStyleControls = true,
+                ShowListControls = true,
+                ShowHypertextLinkControls = true,
+                ShowInsertImageControls = IsLoggedIn,
+                ShowEmbedVideoControls = true
+            };
+
+            StateHasChanged();
+            return;
+        }
+
+        // 에디터 렌더링 이후: 툴바 이미지 버튼의 기본 핸들러(base64)를 서버 업로드로 교체.
+        // 답글/수정 폼은 열릴 때마다 새 인스턴스이므로 플래그 리셋 후 재등록된다.
+        if (!_isInteractive || !IsLoggedIn)
+            return;
+
+        if (!_commentHandlerRegistered)
+        {
+            _commentHandlerRegistered = true;
+            await JS.InvokeVoidAsync("monsterEditor.registerImageHandler", "comment-editor-main");
+        }
+
+        if (replyToCommentId != null && !_replyHandlerRegistered)
+        {
+            _replyHandlerRegistered = true;
+            await JS.InvokeVoidAsync("monsterEditor.registerImageHandler", "comment-editor-reply");
+        }
+
+        if (editingCommentId != null && !_editHandlerRegistered)
+        {
+            _editHandlerRegistered = true;
+            await JS.InvokeVoidAsync("monsterEditor.registerImageHandler", "comment-editor-edit");
         }
     }
 
@@ -374,8 +465,9 @@
             var password = await ShowPasswordDialog("게시글 수정", "게시글 작성 시 입력한 비밀번호를 입력해주세요.");
             if (string.IsNullOrEmpty(password)) return;
 
-            // 비밀번호 검증 후 수정 페이지로 이동 (URL에 password 포함하지 않음, 세션 또는 다른 방식 필요)
-            NavigationManager.NavigateTo($"/board/{CategoryUrl}/{PostId}/edit?verify={Uri.EscapeDataString(password)}");
+            // 비밀번호는 URL에 노출하지 않고 서킷 범위 상태로 전달 (PostEdit에서 1회 소비·검증)
+            EditVerificationState.Set(PostId, password);
+            NavigationManager.NavigateTo($"/board/{CategoryUrl}/{PostId}/edit");
         }
         else
         {
@@ -494,9 +586,21 @@
 
     private async Task SubmitComment()
     {
-        if (string.IsNullOrWhiteSpace(commentContent))
+        // @bind-Content 디바운스로 인한 마지막 입력 유실 방지 — 제출 시점에 직접 조회
+        if (_commentEditor != null)
+        {
+            commentContent = await _commentEditor.GetContentAsync();
+        }
+
+        if (HtmlContentHelper.IsEmptyHtml(commentContent))
         {
             Snackbar.Add("댓글 내용을 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        if (commentContent.Length > AppConstants.ContentLimits.CommentMaxLength)
+        {
+            Snackbar.Add($"댓글이 너무 깁니다. (최대 {AppConstants.ContentLimits.CommentMaxLength:N0}자)", Severity.Warning);
             return;
         }
 
@@ -521,13 +625,9 @@
 
             await CommentService.CreateCommentAsync(comment, IsLoggedIn ? null : commentPassword);
 
-            // Clear form
-            commentNickname = string.Empty;
-            commentPassword = string.Empty;
-            commentContent = string.Empty;
-
             Snackbar.Add("댓글이 등록되었습니다.", Severity.Success);
-            await LoadPostAsync();
+            // 에디터 내부 상태 초기화를 위해 전체 새로고침 (댓글 수정/삭제와 동일 패턴)
+            NavigationManager.NavigateTo($"/board/{CategoryUrl}/{PostId}", forceLoad: true);
         }
         catch (Exception ex)
         {
@@ -545,6 +645,7 @@
         replyNickname = string.Empty;
         replyPassword = string.Empty;
         replyContent = string.Empty;
+        _replyHandlerRegistered = false; // 새 에디터 인스턴스 — 이미지 핸들러 재등록 필요
     }
 
     private void CancelReply()
@@ -557,9 +658,21 @@
 
     private async Task SubmitReply()
     {
-        if (string.IsNullOrWhiteSpace(replyContent))
+        // @bind-Content 디바운스로 인한 마지막 입력 유실 방지 — 제출 시점에 직접 조회
+        if (_replyEditor != null)
+        {
+            replyContent = await _replyEditor.GetContentAsync();
+        }
+
+        if (HtmlContentHelper.IsEmptyHtml(replyContent))
         {
             Snackbar.Add("답글 내용을 입력해주세요.", Severity.Warning);
+            return;
+        }
+
+        if (replyContent.Length > AppConstants.ContentLimits.CommentMaxLength)
+        {
+            Snackbar.Add($"답글이 너무 깁니다. (최대 {AppConstants.ContentLimits.CommentMaxLength:N0}자)", Severity.Warning);
             return;
         }
 
@@ -590,10 +703,9 @@
 
             await CommentService.CreateCommentAsync(reply, IsLoggedIn ? null : replyPassword);
 
-            CancelReply();
-
             Snackbar.Add("답글이 등록되었습니다.", Severity.Success);
-            await LoadPostAsync();
+            // 에디터 내부 상태 초기화를 위해 전체 새로고침 (댓글 수정/삭제와 동일 패턴)
+            NavigationManager.NavigateTo($"/board/{CategoryUrl}/{PostId}", forceLoad: true);
         }
         catch (Exception ex)
         {
@@ -618,7 +730,9 @@
             {
                 editCommentPassword = password;
                 editingCommentId = comment.Id;
-                editCommentContent = comment.Content;
+                // 레거시 평문 댓글은 인코딩+<br> 변환 후 에디터에 주입
+                editCommentContent = comment.IsHtml ? comment.Content : HtmlContentHelper.ToSafeHtml(comment.Content);
+                _editHandlerRegistered = false; // 새 에디터 인스턴스 — 이미지 핸들러 재등록 필요
             }
             else
             {
@@ -629,8 +743,9 @@
         {
             // 본인 댓글
             editingCommentId = comment.Id;
-            editCommentContent = comment.Content;
+            editCommentContent = comment.IsHtml ? comment.Content : HtmlContentHelper.ToSafeHtml(comment.Content);
             editCommentPassword = null;
+            _editHandlerRegistered = false; // 새 에디터 인스턴스 — 이미지 핸들러 재등록 필요
         }
         else
         {
@@ -647,22 +762,41 @@
 
     private async Task SaveEditComment()
     {
-        if (editingCommentId == null || string.IsNullOrWhiteSpace(editCommentContent))
+        // @bind-Content 디바운스로 인한 마지막 입력 유실 방지 — 제출 시점에 직접 조회
+        if (_editCommentEditor != null)
+        {
+            editCommentContent = await _editCommentEditor.GetContentAsync();
+        }
+
+        if (editingCommentId == null || HtmlContentHelper.IsEmptyHtml(editCommentContent))
         {
             Snackbar.Add("댓글 내용을 입력해주세요.", Severity.Warning);
             return;
         }
 
-        var success = await CommentService.UpdateCommentAsync(editingCommentId.Value, editCommentContent, editCommentPassword);
-
-        if (success)
+        if (editCommentContent.Length > AppConstants.ContentLimits.CommentMaxLength)
         {
-            Snackbar.Add("댓글이 수정되었습니다.", Severity.Success);
-            NavigationManager.NavigateTo($"/board/{CategoryUrl}/{PostId}", forceLoad: true);
+            Snackbar.Add($"댓글이 너무 깁니다. (최대 {AppConstants.ContentLimits.CommentMaxLength:N0}자)", Severity.Warning);
+            return;
         }
-        else
+
+        try
         {
-            Snackbar.Add("댓글 수정에 실패했습니다.", Severity.Error);
+            var success = await CommentService.UpdateCommentAsync(editingCommentId.Value, editCommentContent, editCommentPassword);
+
+            if (success)
+            {
+                Snackbar.Add("댓글이 수정되었습니다.", Severity.Success);
+                NavigationManager.NavigateTo($"/board/{CategoryUrl}/{PostId}", forceLoad: true);
+            }
+            else
+            {
+                Snackbar.Add("댓글 수정에 실패했습니다.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"댓글 수정 중 오류가 발생했습니다: {ex.Message}", Severity.Error);
         }
     }
 

@@ -11,15 +11,21 @@ public class PostService
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly AuthService _authService;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly ContentSanitizer _contentSanitizer;
+    private readonly FileUploadService _fileUploadService;
 
     public PostService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         AuthService authService,
-        IHttpContextAccessor httpContextAccessor)
+        IHttpContextAccessor httpContextAccessor,
+        ContentSanitizer contentSanitizer,
+        FileUploadService fileUploadService)
     {
         _contextFactory = contextFactory;
         _authService = authService;
         _httpContextAccessor = httpContextAccessor;
+        _contentSanitizer = contentSanitizer;
+        _fileUploadService = fileUploadService;
     }
 
     public async Task<(List<Post> Posts, int TotalCount)> GetPostsByCategoryAsync(
@@ -37,7 +43,8 @@ public class PostService
 
         if (!string.IsNullOrWhiteSpace(searchQuery))
         {
-            query = query.Where(p => p.Title.Contains(searchQuery) || p.Content.Contains(searchQuery));
+            // HTML 글(IsHtml=true)은 태그 제거본(SearchText)으로, 레거시 평문 글은 Content로 검색
+            query = query.Where(p => p.Title.Contains(searchQuery) || (p.SearchText ?? p.Content).Contains(searchQuery));
         }
 
         var totalCount = await query.CountAsync();
@@ -65,6 +72,9 @@ public class PostService
 
     public async Task<Post> CreatePostAsync(Post post, string? password = null)
     {
+        if (post.Content.Length > AppConstants.ContentLimits.PostMaxLength)
+            throw new ArgumentException($"본문이 허용 길이를 초과했습니다. (최대 {AppConstants.ContentLimits.PostMaxLength:N0}자)");
+
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         // Set UserId if user is authenticated
@@ -84,16 +94,37 @@ public class PostService
             post.AuthorPassword = BCrypt.Net.BCrypt.HashPassword(password);
         }
 
+        // 리치 에디터 HTML — 저장 시 새니타이즈 (XSS 차단 단일 지점)
+        post.Content = _contentSanitizer.Sanitize(post.Content);
+
+        // 새니타이즈로 외부 이미지 등이 제거되어 본문이 비게 된 경우 차단
+        // (UI의 빈 값 검사는 새니타이즈 전이라 이 케이스를 거르지 못함)
+        if (HtmlContentHelper.IsEmptyHtml(post.Content))
+            throw new ArgumentException("본문 내용이 비어 있습니다. (외부 이미지/임베드는 저장 시 제거됩니다)");
+
+        post.IsHtml = true;
+        post.SearchText = ContentSanitizer.ToPlainText(post.Content);
         post.CreatedAt = DateTime.UtcNow;
 
         context.Posts.Add(post);
         await context.SaveChangesAsync();
+
+        // Id 확보 후, 본문에 삽입된 임시 미디어를 게시글 폴더로 이동하고 URL 치환
+        var movedContent = await _fileUploadService.MoveContentTempMediaAsync(post.Content, post.Id);
+        if (movedContent != post.Content)
+        {
+            post.Content = movedContent;
+            await context.SaveChangesAsync();
+        }
 
         return post;
     }
 
     public async Task<bool> UpdatePostAsync(int id, Post updatedPost, string? password = null)
     {
+        if (updatedPost.Content.Length > AppConstants.ContentLimits.PostMaxLength)
+            throw new ArgumentException($"본문이 허용 길이를 초과했습니다. (최대 {AppConstants.ContentLimits.PostMaxLength:N0}자)");
+
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         var post = await context.Posts.FindAsync(id);
@@ -103,8 +134,18 @@ public class PostService
         if (!_authService.CanModifyContent(post.UserId, post.AuthorPassword, password))
             return false;
 
+        // 저장 시 새니타이즈 + 임시 미디어 이동 (Id를 이미 알므로 단일 저장)
+        var content = _contentSanitizer.Sanitize(updatedPost.Content);
+
+        if (HtmlContentHelper.IsEmptyHtml(content))
+            throw new ArgumentException("본문 내용이 비어 있습니다. (외부 이미지/임베드는 저장 시 제거됩니다)");
+
+        content = await _fileUploadService.MoveContentTempMediaAsync(content, id);
+
         post.Title = updatedPost.Title;
-        post.Content = updatedPost.Content;
+        post.Content = content;
+        post.IsHtml = true;
+        post.SearchText = ContentSanitizer.ToPlainText(content);
         post.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();

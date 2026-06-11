@@ -1,8 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Caching.Memory;
 using System.Net;
+using System.Security.Claims;
 using Monster.WebApp.Components;
 using Monster.WebApp.Data;
 using Monster.WebApp.Services.Auth;
@@ -74,6 +77,39 @@ namespace Monster.WebApp
                     options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
                         ? CookieSecurePolicy.SameAsRequest
                         : CookieSecurePolicy.Always;
+
+                    // 쿠키의 사용자가 DB에 실재하고 활성 상태인지 검증.
+                    // - 다른 DB에서 발급된 스테일 쿠키(개발 중 연결 전환, DB 재생성)가 FK 오류를 일으키는 것 방지
+                    // - 비활성화/삭제된 사용자의 기존 세션을 무효화 (기존엔 쿠키 만료까지 7일간 유효했음)
+                    // 매 요청 DB 조회를 피하기 위해 사용자별 5분 캐시 사용.
+                    options.Events.OnValidatePrincipal = async context =>
+                    {
+                        var userIdClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        if (!int.TryParse(userIdClaim, out var userId))
+                        {
+                            context.RejectPrincipal();
+                            await TrySignOutAsync(context.HttpContext);
+                            return;
+                        }
+
+                        var cache = context.HttpContext.RequestServices.GetRequiredService<IMemoryCache>();
+                        var cacheKey = $"user_valid_{userId}";
+
+                        if (!cache.TryGetValue(cacheKey, out bool isValid))
+                        {
+                            var contextFactory = context.HttpContext.RequestServices
+                                .GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+                            await using var db = await contextFactory.CreateDbContextAsync();
+                            isValid = await db.Users.AsNoTracking().AnyAsync(u => u.Id == userId && u.IsActive);
+                            cache.Set(cacheKey, isValid, TimeSpan.FromMinutes(5));
+                        }
+
+                        if (!isValid)
+                        {
+                            context.RejectPrincipal();
+                            await TrySignOutAsync(context.HttpContext);
+                        }
+                    };
                 });
 
             builder.Services.AddAuthorization(options =>
@@ -92,6 +128,11 @@ namespace Monster.WebApp
             builder.Services.AddScoped<PostService>();
             builder.Services.AddScoped<CommentService>();
             builder.Services.AddScoped<FileUploadService>();
+            // 익명 글 수정 비밀번호 전달용 (서킷 범위 — URL 노출 방지)
+            builder.Services.AddScoped<PostEditVerificationState>();
+
+            // 리치 에디터 HTML 새니타이저 (구성이 생성자에서 고정되므로 싱글톤으로 안전)
+            builder.Services.AddSingleton<ContentSanitizer>();
 
             builder.Services.AddMudServices();
 
@@ -107,15 +148,15 @@ namespace Monster.WebApp
                 options.Cookie.IsEssential = true;
             });
 
-            // Configure file upload size limits
+            // Configure file upload size limits (에디터 이미지 10MB + 여유)
             builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
             {
-                options.MultipartBodyLengthLimit = 52428800; // 50MB
+                options.MultipartBodyLengthLimit = 15_728_640; // 15MB
             });
 
             builder.WebHost.ConfigureKestrel(options =>
             {
-                options.Limits.MaxRequestBodySize = 52428800; // 50MB
+                options.Limits.MaxRequestBodySize = 15_728_640; // 15MB
             });
 
             // Add controllers for API endpoints
@@ -200,6 +241,22 @@ namespace Monster.WebApp
             await InitializeDefaultAdminAsync(app);
 
             app.Run();
+        }
+
+        /// <summary>
+        /// 스테일 쿠키 무효화용 로그아웃. WebSocket 업그레이드 요청 등 응답 헤더를 쓸 수 없는
+        /// 상황에서는 Set-Cookie가 불가능해 예외가 날 수 있음 — 이때는 RejectPrincipal만으로 충분.
+        /// </summary>
+        private static async Task TrySignOutAsync(HttpContext httpContext)
+        {
+            try
+            {
+                await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            }
+            catch (InvalidOperationException)
+            {
+                // 응답 시작 후에는 쿠키 삭제 불가 — 다음 일반 HTTP 요청에서 재시도됨
+            }
         }
 
         private static async Task ApplyMigrationsAsync(WebApplication app)

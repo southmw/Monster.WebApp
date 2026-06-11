@@ -9,6 +9,9 @@
 ### 게시판 시스템
 - 다중 카테고리 지원
 - 게시글 CRUD (생성, 읽기, 수정, 삭제)
+- **WYSIWYG 에디터** - Quill 2 기반 리치 텍스트 편집 (서식/제목/목록/인용/코드블록/링크), 댓글은 축소 툴바
+- **이미지 첨부** - 게시글·댓글 툴바 버튼으로 업로드 (로그인 사용자 전용, 최대 10MB, 매직넘버 검증)
+- **동영상 첨부** - 게시글·댓글 툴바 버튼으로 YouTube/Vimeo 링크 임베드 (파일 업로드 아님)
 - 댓글 및 중첩 답글 (대댓글) 기능
 - 댓글/답글 수정/삭제 기능
 - 비밀번호 기반 게시글/댓글 보호
@@ -28,7 +31,7 @@
 - **회원가입 제한** - IP당 1시간에 3회 (대량 계정 생성 방지)
 - **비밀번호 정책** - 최소 8자, 대/소문자/숫자/특수문자 필수
 - **쿠키 보안** - HttpOnly, SameSite=Lax, 프로덕션 HTTPS 전용(Secure)
-- **XSS 방어** - 게시글/댓글 본문 출력 시 HTML 인코딩 처리 (저장형 XSS 차단)
+- **XSS 방어** - 리치 에디터 본문은 저장 시 서버 측 새니타이징(HtmlSanitizer 화이트리스트), 레거시 평문은 출력 시 HTML 인코딩 (저장형 XSS 차단)
 - **IP 스푸핑 방어** - X-Forwarded-For를 신뢰하지 않음 (신뢰 프록시는 `ForwardedHeaders:KnownProxies` 설정으로 지정)
 - **응답 보안 헤더** - X-Content-Type-Options, X-Frame-Options, Referrer-Policy
 - **비공개 게시판 접근 차단** - 목록/상세/수정/작성 전 경로에서 카테고리 권한 검증
@@ -53,6 +56,8 @@
 | .NET | 8.0 | 플랫폼 |
 | Blazor | Server/WebAssembly 하이브리드 | 프론트엔드 |
 | MudBlazor | 7.16.0 | Material Design UI |
+| Spillgebees.Blazor.RichTextEditor | 2.2.0 | WYSIWYG 에디터 (Quill 2) |
+| HtmlSanitizer | 9.0.892 | 본문 HTML 새니타이징 |
 | Entity Framework Core | 8.0.11 | ORM |
 | SQL Server | 2022 | 데이터베이스 |
 | BCrypt.Net-Next | 4.0.3 | 비밀번호 해싱 |

@@ -18,6 +18,15 @@ public class Post
     [Required]
     public string Content { get; set; } = string.Empty;
 
+    /// <summary>
+    /// true면 Content가 저장 시 새니타이즈된 HTML(리치 에디터 작성),
+    /// false면 레거시 평문 (출력 시 HtmlContentHelper.ToSafeHtml로 인코딩)
+    /// </summary>
+    public bool IsHtml { get; set; } = false;
+
+    /// <summary>HTML 태그를 제거한 본문 — 검색용 (IsHtml=true인 글에서 태그가 검색에 걸리지 않도록)</summary>
+    public string? SearchText { get; set; }
+
     [Required]
     [StringLength(50)]
     public string AuthorNickname { get; set; } = string.Empty;

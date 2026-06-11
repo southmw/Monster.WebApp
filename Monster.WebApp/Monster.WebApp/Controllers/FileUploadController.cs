@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Monster.WebApp.Services;
 
 namespace Monster.WebApp.Controllers;
 
@@ -11,10 +12,9 @@ public class FileUploadController : ControllerBase
     private readonly IWebHostEnvironment _environment;
     private readonly ILogger<FileUploadController> _logger;
 
+    // 에디터 이미지 업로드 전용 (동영상은 YouTube/Vimeo 링크 임베드 방식이라 파일 업로드 미지원)
     private static readonly string[] AllowedImageExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
-    private static readonly string[] AllowedVideoExtensions = { ".mp4", ".webm" };
     private const long MaxImageSize = 10 * 1024 * 1024;  // 10MB
-    private const long MaxVideoSize = 50 * 1024 * 1024;  // 50MB
 
     public FileUploadController(IWebHostEnvironment environment, ILogger<FileUploadController> logger)
     {
@@ -23,7 +23,7 @@ public class FileUploadController : ControllerBase
     }
 
     [HttpPost]
-    [RequestSizeLimit(52428800)] // 50MB
+    [RequestSizeLimit(10_485_760)] // 10MB (이미지 전용)
     public async Task<IActionResult> Upload(IFormFile file)
     {
         try
@@ -34,31 +34,34 @@ public class FileUploadController : ControllerBase
             }
 
             var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-            var isImage = AllowedImageExtensions.Contains(extension);
-            var isVideo = AllowedVideoExtensions.Contains(extension);
 
-            if (!isImage && !isVideo)
+            if (!AllowedImageExtensions.Contains(extension))
             {
                 return BadRequest(new UploadResponse
                 {
                     Success = false,
-                    ErrorMessage = "지원하지 않는 파일 형식입니다. (이미지: jpg, png, gif, webp / 동영상: mp4, webm)"
+                    ErrorMessage = "지원하지 않는 파일 형식입니다. (이미지: jpg, png, gif, webp)"
                 });
             }
 
-            var maxSize = isImage ? MaxImageSize : MaxVideoSize;
-            if (file.Length > maxSize)
+            if (file.Length > MaxImageSize)
             {
-                var maxSizeMB = maxSize / (1024 * 1024);
                 return BadRequest(new UploadResponse
                 {
                     Success = false,
-                    ErrorMessage = $"파일 크기가 너무 큽니다. (최대 {maxSizeMB}MB)"
+                    ErrorMessage = $"파일 크기가 너무 큽니다. (최대 {MaxImageSize / (1024 * 1024)}MB)"
                 });
             }
 
             // 파일 시그니처(매직넘버) 검증 — 확장자 위조를 통한 악성 파일 업로드 차단
-            if (!await IsValidFileSignatureAsync(file, extension))
+            // (검증 로직은 FileUploadService와 공유)
+            bool validSignature;
+            await using (var signatureStream = file.OpenReadStream())
+            {
+                validSignature = await FileUploadService.IsValidFileSignatureAsync(signatureStream, extension);
+            }
+
+            if (!validSignature)
             {
                 _logger.LogWarning("파일 시그니처 불일치로 업로드 거부: {FileName}", file.FileName);
                 return BadRequest(new UploadResponse
@@ -86,8 +89,7 @@ public class FileUploadController : ControllerBase
             {
                 Success = true,
                 Url = relativeUrl,
-                FileName = file.FileName,
-                IsImage = isImage
+                FileName = file.FileName
             });
         }
         catch (Exception ex)
@@ -101,53 +103,11 @@ public class FileUploadController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// 파일의 첫 바이트(매직넘버)가 확장자와 일치하는지 검증한다.
-    /// </summary>
-    private static async Task<bool> IsValidFileSignatureAsync(IFormFile file, string extension)
-    {
-        await using var stream = file.OpenReadStream();
-        var header = new byte[12];
-        var read = await stream.ReadAsync(header.AsMemory(0, header.Length));
-        if (read < 4)
-            return false;
-
-        bool StartsWith(params byte[] sig) => HasPrefix(header, sig);
-
-        return extension switch
-        {
-            ".jpg" or ".jpeg" => StartsWith(0xFF, 0xD8, 0xFF),
-            ".png" => StartsWith(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A),
-            ".gif" => StartsWith(0x47, 0x49, 0x46, 0x38), // GIF8
-            ".webp" => read >= 12
-                       && HasPrefix(header, new byte[] { 0x52, 0x49, 0x46, 0x46 })       // RIFF
-                       && header[8] == 0x57 && header[9] == 0x45                          // WE
-                       && header[10] == 0x42 && header[11] == 0x50,                       // BP
-            ".mp4" => read >= 8 && header[4] == 0x66 && header[5] == 0x74
-                      && header[6] == 0x79 && header[7] == 0x70,                          // ftyp
-            ".webm" => StartsWith(0x1A, 0x45, 0xDF, 0xA3),
-            _ => false
-        };
-    }
-
-    private static bool HasPrefix(byte[] data, byte[] prefix)
-    {
-        if (data.Length < prefix.Length)
-            return false;
-        for (var i = 0; i < prefix.Length; i++)
-        {
-            if (data[i] != prefix[i])
-                return false;
-        }
-        return true;
-    }
-
     public class UploadResponse
     {
         public bool Success { get; set; }
         public string? Url { get; set; }
         public string? FileName { get; set; }
-        public bool IsImage { get; set; }
         public string? ErrorMessage { get; set; }
     }
 }
