@@ -126,10 +126,24 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 - `MudSnackbarProvider`의 `Position` 속성 미지원
 - `Shadows.Elevation`는 26개 값 필요
 
-### UI 디자인 규칙
+### UI 디자인 규칙 (디자인 시스템)
+- **방향**: 모던·심플 — Slate 캔버스 + Indigo 단일 액센트. 사이드바는 모드별 톤 추종(라이트=Slate 50+테두리 구분 / 다크=어둡게), 히어로 캔버스(`home-hero`)만 다크 고정 액센트
+- **폰트**: Pretendard Variable (App.razor에서 jsdelivr CDN 로드, CustomTheme Typography에 지정)
+- **커스텀 테마**: [Shared/CustomTheme.cs](Monster.WebApp/Monster.WebApp/Shared/CustomTheme.cs) — Primary Indigo(#6366F1/#818CF8), LinesDefault/Divider/TableLines 정의됨
+- **색상 하드코딩 금지**: CSS는 MudBlazor 팔레트 변수(`var(--mud-palette-*)`)를 사용해 라이트/다크 자동 대응. 소프트 틴트는 `color-mix(in srgb, var(--mud-palette-primary) N%, transparent)`로 파생. `.mud-theme-light`/`.mud-theme-dark` 분기 스타일은 팔레트 변수로 해결 불가할 때만 사용
+- **CSS 파일 구성** (wwwroot): `css/layout.css`(앱바·사이드바·푸터·NavMenu), `css/custom.css`(페이지·카드·게시판·댓글·에디터), `css/account.css`(인증 페이지), `app.css`(폼 유효성)
+- **CSS 캐시 버스팅**: 로컬 CSS 링크는 App.razor에서 `?v=@AssetVersion`(앱 시작 시각 Ticks) 쿼리 부착 — `UseStaticFiles` 기본값은 Cache-Control 미전송이라 브라우저 휴리스틱 캐시로 CSS 갱신이 전달되지 않는 문제 방지. **새 CSS 파일 추가 시 동일하게 `?v=@AssetVersion`을 붙일 것** (재시작/재배포 시 자동 무효화)
+- **공통 컴포넌트/헬퍼**:
+  - `Components/Shared/EmptyState.razor` — 빈 목록/에러/접근 거부 상태 표준 UI (Icon/Title/Description/Severity + 액션 버튼 슬롯). 페이지에 상태 UI를 새로 만들지 말고 이것을 사용
+  - `Shared/CategoryDisplayHelper.GetIcon(slug)` — 카테고리 아이콘 매핑 중앙화 (NavMenu/Home/Board Index 공용)
+  - `Shared/TimeDisplayHelper.ToRelative(utc)` — 상대시간 표시 ("방금 전"/"N분 전"/…, 7일 이상은 MM/dd)
+  - 카드 류는 custom.css의 `content-card`/`category-card`/`stat-tile` 클래스 재사용
+- **로딩 상태**: 페이지 최초 로딩은 MudSkeleton(실제 레이아웃 골격)으로, 부분 갱신은 MudProgressCircular
+- **레이아웃**: MudDrawer는 데스크톱(≥Md)=`Mini`(햄버거로 닫으면 68px 아이콘 레일) / 모바일(<Md)=`Temporary`(오버레이) — MainLayout이 `IBrowserViewportService`(IBrowserViewportObserver 구현)로 브레이크포인트를 구독해 Variant 전환. 푸터는 MainLayout의 `app-footer`. 히어로 캔버스(`home-hero` 클래스)는 홈/프로필 공용
+- **홈 피드**: 최근/인기 게시글은 단일 카드 + 커스텀 탭 토글(`home-feed-tabs`, MudTabs 미사용), 행에 카테고리 칩 + 상대시간, 각 8건 표시
+- **게시글 목록**: MudTable이 아닌 div 기반 리스트(`post-list`/`post-list-item`) — 모바일 대응. 공지글은 `post-list-item-pinned` + `post-pin-chip`
 - 입력 폼: `Margin="Margin.Dense"`, `MudGrid Spacing="1"`
-- 테마: 보라색 그라디언트 (#667eea → #764ba2)
-- 커스텀 테마: [Shared/CustomTheme.cs](Monster.WebApp/Monster.WebApp/Shared/CustomTheme.cs)
+- 인라인 `Style=` 사용 자제 — 색상/굵기는 테마와 CSS 클래스로 해결 (h4~h6 굵기는 테마 Typography에 정의됨)
 
 ### 비밀번호 필드 UX
 비밀번호 필드에는 표시/숨김 토글 기능 구현:
@@ -169,7 +183,7 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 
 - **조회수 중복 방지**: 세션 기반 (같은 세션에서 재조회 시 카운트 미증가). 단, Blazor 서킷 내 SPA 내비게이션(예: 글 등록 직후 상세 이동)에서는 응답이 이미 시작돼 신규 세션을 확립할 수 없음 — 이 경우 `IncrementViewCountAsync`가 중복 방지 기록만 생략하고 조회수 증가는 유지(`InvalidOperationException` 무시 처리). 조회수 증가 호출은 PostDetail **최초 로드 시 1회만** 수행 (댓글/추천 후 새로고침에서 호출 금지 — 중복 카운트 방지)
 - **추천 중복 방지**: `PostVote` 모델로 투표 기록 저장 (로그인 사용자: UserId, 비로그인: IP 주소)
-- **공지 고정**: `Post.IsPinned`/`PinnedAt` 필드. `PostService.TogglePinAsync()`로 토글 (Admin/SubAdmin 권한). 목록 정렬은 공지글(PinnedAt 최신순) → 일반글(CreatedAt 최신순), 공지글은 상단에 보라색 배경 + "공지" 칩 표시
+- **공지 고정**: `Post.IsPinned`/`PinnedAt` 필드. `PostService.TogglePinAsync()`로 토글 (Admin/SubAdmin 권한). 목록 정렬은 공지글(PinnedAt 최신순) → 일반글(CreatedAt 최신순), 공지글은 상단에 Primary 틴트 배경 + 좌측 액센트 바 + "공지" 칩 표시(`post-list-item-pinned`)
 - **카테고리 접근 제어**: `CategoryAccess` 모델 + `CategoryAccessService` (N+1 회피 위해 전체 로딩 후 메모리 필터링). **목록(PostList)·상세(PostDetail)·수정(PostEdit)·작성(PostWrite) 페이지 모두 `CanAccessCategoryAsync`/`CanWriteToCategoryAsync` 검증 필수** — 새 게시글 노출 경로를 추가할 때 반드시 포함할 것. 홈의 최근/인기 글은 완전 공개 카테고리(`IsPublic && !RequireAuth`)만 집계
 - **검색**: `/board/{slug}` 목록에서 지원. HTML 글(`IsHtml=true`)은 태그 제거본(`Post.SearchText`)으로, 레거시 평문 글은 `Content`로 검색 (`(p.SearchText ?? p.Content).Contains(q)`)
 - **페이지네이션**: `PostList.razor`에서 MudPagination + 페이지 크기 선택 (기본 20). 페이지/크기/검색어는 URL 쿼리(`page`/`size`/`q`)로 보존 — 뒤로가기/새로고침 시 상태 유지

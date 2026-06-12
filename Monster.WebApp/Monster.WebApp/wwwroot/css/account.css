@@ -2,15 +2,12 @@
 .auth-container {
     padding: 40px;
     border-radius: 16px;
-}
-
-.mud-theme-light .auth-container {
-    background: #ffffff;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
 }
 
 .mud-theme-dark .auth-container {
-    background: #1e293b;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 

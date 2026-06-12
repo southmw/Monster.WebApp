@@ -1,0 +1,37 @@
+@* 빈 목록 / 에러 / 접근 거부 등 페이지 상태 표시용 공통 컴포넌트.
+   페이지마다 제각각이던 MudPaper + 아이콘 + 메시지 패턴을 표준화한다. *@
+
+<MudPaper Elevation="0" Class="empty-state">
+    <div class="empty-state-icon @(Severity == Severity.Error ? "empty-state-icon-error" : "")">
+        <MudIcon Icon="@Icon" Size="Size.Large" />
+    </div>
+    <MudText Typo="Typo.h6" Class="empty-state-title">@Title</MudText>
+    @if (!string.IsNullOrEmpty(Description))
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">@Description</MudText>
+    }
+    @if (ChildContent is not null)
+    {
+        <div class="mt-5">@ChildContent</div>
+    }
+</MudPaper>
+
+@code {
+    /// <summary>표시할 아이콘 (Icons.Material.*)</summary>
+    [Parameter, EditorRequired]
+    public string Icon { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    /// <summary>Error면 아이콘을 에러 톤으로 표시 (기본: 중립 톤)</summary>
+    [Parameter]
+    public Severity Severity { get; set; } = Severity.Normal;
+
+    /// <summary>액션 버튼 영역 (다시 시도 / 목록으로 등)</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

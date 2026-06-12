@@ -12,58 +12,52 @@
 
 @if (_isLoading)
 {
-    <div style="display: flex; justify-content: center; padding: 64px 0;">
-        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
-    </div>
+    <MudSkeleton Width="220px" Height="40px" Class="mb-4" />
+    <MudPaper Elevation="0" Class="post-list">
+        @for (var i = 0; i < 8; i++)
+        {
+            <div class="pa-4">
+                <MudSkeleton Width="@($"{85 - i * 4}%")" Height="20px" />
+                <MudSkeleton Width="30%" Height="14px" Class="mt-1" />
+            </div>
+        }
+    </MudPaper>
 }
 else if (_loadFailed)
 {
-    <MudPaper Elevation="0" Style="padding: 64px; text-align: center; border: 1px solid rgba(0, 0, 0, 0.08);">
-        <MudIcon Icon="@Icons.Material.Outlined.ErrorOutline" Size="Size.Large" Color="Color.Error" Style="margin-bottom: 16px;" />
-        <MudText Typo="Typo.h6" Color="Color.Error">게시글 목록을 불러오지 못했습니다</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top: 8px;">
-            잠시 후 다시 시도해주세요.
-        </MudText>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RetryLoadAsync" Style="margin-top: 24px;">
-            다시 시도
-        </MudButton>
-    </MudPaper>
+    <EmptyState Icon="@Icons.Material.Outlined.ErrorOutline"
+                Title="게시글 목록을 불러오지 못했습니다"
+                Description="잠시 후 다시 시도해주세요."
+                Severity="Severity.Error">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RetryLoadAsync" DropShadow="false">다시 시도</MudButton>
+    </EmptyState>
 }
 else if (category == null)
 {
-    <MudPaper Elevation="0" Style="padding: 64px; text-align: center; border: 1px solid rgba(0, 0, 0, 0.08);">
-        <MudIcon Icon="@Icons.Material.Outlined.Error" Size="Size.Large" Color="Color.Error" Style="margin-bottom: 16px;" />
-        <MudText Typo="Typo.h6" Color="Color.Error">게시판을 찾을 수 없습니다</MudText>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/board" Style="margin-top: 24px;">
-            게시판 목록으로
-        </MudButton>
-    </MudPaper>
+    <EmptyState Icon="@Icons.Material.Outlined.Error"
+                Title="게시판을 찾을 수 없습니다"
+                Severity="Severity.Error">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/board" DropShadow="false">게시판 목록으로</MudButton>
+    </EmptyState>
 }
 else if (!hasAccess)
 {
-    <MudPaper Elevation="0" Style="padding: 64px; text-align: center; border: 1px solid rgba(0, 0, 0, 0.08);">
-        <MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Large" Color="Color.Error" Style="margin-bottom: 16px;" />
-        <MudText Typo="Typo.h6" Color="Color.Error">접근 권한이 없습니다</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top: 8px;">
-            이 게시판은 권한이 있는 사용자만 접근할 수 있습니다.
-        </MudText>
+    <EmptyState Icon="@Icons.Material.Outlined.Lock"
+                Title="접근 권한이 없습니다"
+                Description="이 게시판은 권한이 있는 사용자만 접근할 수 있습니다."
+                Severity="Severity.Error">
         @if (!AuthService.IsAuthenticated())
         {
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       Href="/account/login"
-                       Style="margin-top: 24px;">
-                로그인하기
-            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/account/login" DropShadow="false">로그인하기</MudButton>
         }
-    </MudPaper>
+    </EmptyState>
 }
 else
 {
     <div class="post-header">
         <div>
-            <MudText Typo="Typo.h4" Style="font-weight: 700; margin-bottom: 8px;">@category.Name</MudText>
-            <MudText Typo="Typo.body1" Color="Color.Secondary">
+            <MudText Typo="Typo.h4">@category.Name</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-1">
                 @category.Description
             </MudText>
         </div>
@@ -73,14 +67,14 @@ else
                        Color="Color.Primary"
                        StartIcon="@Icons.Material.Filled.Create"
                        Href="@($"/board/{CategoryUrl}/write")"
-                       Style="border-radius: 8px; padding: 10px 24px;">
+                       DropShadow="false">
                 글쓰기
             </MudButton>
         }
     </div>
 
     <!-- 검색 영역 -->
-    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 16px;">
+    <div class="post-search-bar">
         @if (!string.IsNullOrWhiteSpace(_searchQuery))
         {
             <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small"
@@ -92,100 +86,82 @@ else
                       Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search"
                       OnAdornmentClick="Search" Margin="Margin.Dense"
                       OnKeyUp="@((e) => { if (e.Key == "Enter") Search(); })"
-                      Placeholder="검색" Clearable="true" Style="max-width: 250px;" />
+                      Placeholder="검색" Clearable="true" Class="post-search-field" />
     </div>
 
     @if (posts == null)
     {
-        <div style="display: flex; justify-content: center; padding: 64px 0;">
+        <div class="d-flex justify-center py-16">
             <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
         </div>
     }
     else if (posts.Count == 0)
     {
-        <MudPaper Elevation="0" Style="padding: 64px; text-align: center; border: 1px solid rgba(0, 0, 0, 0.08);">
-            <MudIcon Icon="@Icons.Material.Outlined.Article" Size="Size.Large" Color="Color.Secondary" Style="margin-bottom: 16px;" />
-            <MudText Typo="Typo.h6" Color="Color.Secondary">작성된 게시글이 없습니다</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top: 8px;">
-                첫 번째 게시글을 작성해보세요!
-            </MudText>
-        </MudPaper>
+        @if (!string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            <EmptyState Icon="@Icons.Material.Outlined.SearchOff"
+                        Title="검색 결과가 없습니다"
+                        Description="@($"'{_searchQuery}'에 해당하는 게시글을 찾지 못했습니다.")">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="ClearSearch">검색 초기화</MudButton>
+            </EmptyState>
+        }
+        else
+        {
+            <EmptyState Icon="@Icons.Material.Outlined.Article"
+                        Title="작성된 게시글이 없습니다"
+                        Description="첫 번째 게시글을 작성해보세요!" />
+        }
     }
     else
     {
-        <MudPaper Elevation="0" Class="post-list-table">
-            <MudTable Items="@posts" Hover="true" Elevation="0" Class="post-row">
-                <ColGroup>
-                    <col />
-                    <col style="width: 120px;" />
-                    <col style="width: 140px;" />
-                    <col style="width: 80px;" />
-                    <col style="width: 80px;" />
-                </ColGroup>
-                <HeaderContent>
-                    <MudTh Style="font-weight: 600;">제목</MudTh>
-                    <MudTh Style="font-weight: 600;">작성자</MudTh>
-                    <MudTh Style="font-weight: 600;">작성일</MudTh>
-                    <MudTh Style="font-weight: 600; text-align: center;">조회</MudTh>
-                    <MudTh Style="font-weight: 600; text-align: center;">추천</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    <MudTd DataLabel="제목" Style="@(context.IsPinned ? "background-color: rgba(102, 126, 234, 0.05);" : "")">
-                        @if (context.IsPinned)
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
-                                     Style="margin-right: 8px; font-size: 11px; height: 20px;">
-                                공지
-                            </MudChip>
-                        }
-                        <MudLink Href="@($"/board/{CategoryUrl}/{context.Id}")"
-                                 Style="@(context.IsPinned ? "font-weight: 600; color: #667eea;" : "font-weight: 500; color: #1f2937;")">
-                            @context.Title
-                        </MudLink>
-                    </MudTd>
-                    <MudTd DataLabel="작성자">
-                        <MudText Typo="Typo.body2">@context.AuthorNickname</MudText>
-                    </MudTd>
-                    <MudTd DataLabel="작성일">
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">
-                            @context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")
-                        </MudText>
-                    </MudTd>
-                    <MudTd DataLabel="조회" Style="text-align: center;">
-                        <span class="stat-badge" style="background: rgba(6, 182, 212, 0.1); color: #06b6d4;">
-                            <MudIcon Icon="@Icons.Material.Outlined.Visibility" Size="Size.Small" />
-                            @context.ViewCount
+        <MudPaper Elevation="0" Class="post-list">
+            @foreach (var post in posts)
+            {
+                <a class="post-list-item @(post.IsPinned ? "post-list-item-pinned" : "")"
+                   href="@($"/board/{CategoryUrl}/{post.Id}")">
+                    <div class="post-list-main">
+                        <div class="post-list-title-row">
+                            @if (post.IsPinned)
+                            {
+                                <span class="post-pin-chip">공지</span>
+                            }
+                            <span class="post-list-title">@post.Title</span>
+                        </div>
+                        <div class="post-list-meta">
+                            <span>@post.AuthorNickname</span>
+                            <span class="post-meta-dot">·</span>
+                            <span>@post.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</span>
+                        </div>
+                    </div>
+                    <div class="post-list-stats">
+                        <span class="post-stat" title="조회수">
+                            <MudIcon Icon="@Icons.Material.Outlined.Visibility" Size="Size.Small" />@post.ViewCount
                         </span>
-                    </MudTd>
-                    <MudTd DataLabel="추천" Style="text-align: center;">
-                        <span class="stat-badge" style="background: rgba(236, 72, 153, 0.1); color: #ec4899;">
-                            <MudIcon Icon="@Icons.Material.Outlined.ThumbUp" Size="Size.Small" />
-                            @context.VoteCount
+                        <span class="post-stat" title="추천수">
+                            <MudIcon Icon="@Icons.Material.Outlined.ThumbUp" Size="Size.Small" />@post.VoteCount
                         </span>
-                    </MudTd>
-                </RowTemplate>
-            </MudTable>
+                    </div>
+                </a>
+            }
         </MudPaper>
 
         <!-- 페이징 영역 -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding: 8px 0;">
-            <div class="d-flex flex-column align-left">
-                <MudSelect T="int" Value="@pageSize" ValueChanged="OnPageSizeChanged"
-                        Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
-                        Style="Width: 100px;" Label="Page Size">
-                    <MudSelectItem Value="10">10개</MudSelectItem>
-                    <MudSelectItem Value="20">20개</MudSelectItem>
-                    <MudSelectItem Value="50">50개</MudSelectItem>
-                    <MudSelectItem Value="100">100개</MudSelectItem>
-                </MudSelect>
-            </div>
+        <div class="post-paging">
+            <MudSelect T="int" Value="@pageSize" ValueChanged="OnPageSizeChanged"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                       Class="post-paging-size" Label="표시 개수">
+                <MudSelectItem Value="10">10개</MudSelectItem>
+                <MudSelectItem Value="20">20개</MudSelectItem>
+                <MudSelectItem Value="50">50개</MudSelectItem>
+                <MudSelectItem Value="100">100개</MudSelectItem>
+            </MudSelect>
             <MudPagination Count="@((int)Math.Ceiling(totalCount / (double)pageSize))"
-                        Selected="@currentPage"
-                        SelectedChanged="OnPageChanged"
-                        Color="Color.Primary"
-                        Variant="Variant.Filled"
-                        Size="Size.Small" />
-            <div style="width: 100px;"></div>
+                           Selected="@currentPage"
+                           SelectedChanged="OnPageChanged"
+                           Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           Size="Size.Small"
+                           Class="post-paging-pages" />
         </div>
     }
 }

@@ -16,16 +16,19 @@ public static class CustomTheme
             Error = "#ef4444",
             AppbarBackground = "#FFFFFF",
             AppbarText = "#0F172A", // Slate 900
-            DrawerBackground = "#1E293B", // Slate 800 (Dark Sidebar)
-            DrawerText = "#F8FAFC", // Slate 50
-            DrawerIcon = "#CBD5E1", // Slate 300
+            DrawerBackground = "#F8FAFC", // Slate 50 — 흰 헤더/회색 콘텐츠 사이의 옅은 톤 (경계는 테두리로 구분)
+            DrawerText = "#334155", // Slate 700
+            DrawerIcon = "#64748B", // Slate 500
             Background = "#F1F5F9", // Slate 100 (Light Gray Background)
             Surface = "#FFFFFF",
             TextPrimary = "#0F172A", // Slate 900
             TextSecondary = "#64748B", // Slate 500
             ActionDefault = "#64748B",
             ActionDisabled = "#94A3B8",
-            ActionDisabledBackground = "#E2E8F0"
+            ActionDisabledBackground = "#E2E8F0",
+            LinesDefault = "#E2E8F0", // Slate 200 — 카드 테두리/구분선
+            Divider = "#E2E8F0",
+            TableLines = "#F1F5F9" // Slate 100 — 목록 행 구분선 (더 옅게)
         },
         PaletteDark = new PaletteDark
         {
@@ -46,11 +49,14 @@ public static class CustomTheme
             TextSecondary = "#94A3B8",
             ActionDefault = "#94A3B8",
             ActionDisabled = "#475569",
-            ActionDisabledBackground = "#334155"
+            ActionDisabledBackground = "#334155",
+            LinesDefault = "#334155", // Slate 700
+            Divider = "#334155",
+            TableLines = "#1E293B"
         },
         LayoutProperties = new LayoutProperties
         {
-            DefaultBorderRadius = "8px",
+            DefaultBorderRadius = "10px",
             DrawerWidthLeft = "260px"
         },
         Shadows = new Shadow
@@ -71,18 +77,20 @@ public static class CustomTheme
         {
             Default = new Default
             {
-                FontFamily = new[] { "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif" },
+                // Pretendard Variable — 한글 최적화 가변 폰트 (App.razor에서 CDN 로드)
+                FontFamily = new[] { "Pretendard Variable", "Pretendard", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif" },
                 FontSize = ".875rem",
                 FontWeight = 400,
                 LineHeight = 1.6,
-                LetterSpacing = ".005em"
+                LetterSpacing = "-0.01em" // Pretendard 권장 자간 (한글)
             },
-            H1 = new H1 { FontSize = "2.5rem", FontWeight = 700, LineHeight = 1.2 },
-            H2 = new H2 { FontSize = "2rem", FontWeight = 700, LineHeight = 1.2 },
-            H3 = new H3 { FontSize = "1.75rem", FontWeight = 700, LineHeight = 1.2 },
-            H4 = new H4 { FontSize = "1.5rem", FontWeight = 700, LineHeight = 1.2 },
-            H5 = new H5 { FontSize = "1.25rem", FontWeight = 600, LineHeight = 1.2 },
-            H6 = new H6 { FontSize = "1rem", FontWeight = 600, LineHeight = 1.2 },
+            H1 = new H1 { FontSize = "2.5rem", FontWeight = 800, LineHeight = 1.2, LetterSpacing = "-0.02em" },
+            H2 = new H2 { FontSize = "2rem", FontWeight = 700, LineHeight = 1.2, LetterSpacing = "-0.02em" },
+            H3 = new H3 { FontSize = "1.75rem", FontWeight = 700, LineHeight = 1.25, LetterSpacing = "-0.02em" },
+            H4 = new H4 { FontSize = "1.5rem", FontWeight = 700, LineHeight = 1.3, LetterSpacing = "-0.02em" },
+            H5 = new H5 { FontSize = "1.25rem", FontWeight = 600, LineHeight = 1.3, LetterSpacing = "-0.01em" },
+            H6 = new H6 { FontSize = "1rem", FontWeight = 600, LineHeight = 1.4, LetterSpacing = "-0.01em" },
+            Subtitle1 = new Subtitle1 { FontWeight = 600 },
             Button = new Button { FontWeight = 600, TextTransform = "none" } // No uppercase buttons
         }
     };

@@ -18,26 +18,19 @@
     }
     else if (!canWrite)
     {
-        <MudPaper Elevation="0" Style="padding: 64px; text-align: center; border: 1px solid rgba(0, 0, 0, 0.08);">
-            <MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Large" Color="Color.Error" Style="margin-bottom: 16px;" />
-            <MudText Typo="Typo.h6" Color="Color.Error">글쓰기 권한이 없습니다</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top: 8px;">
-                이 게시판은 권한이 있는 사용자만 글을 작성할 수 있습니다.
-            </MudText>
+        <EmptyState Icon="@Icons.Material.Outlined.Lock"
+                    Title="글쓰기 권한이 없습니다"
+                    Description="이 게시판은 권한이 있는 사용자만 글을 작성할 수 있습니다."
+                    Severity="Severity.Error">
             @if (!AuthService.IsAuthenticated())
             {
-                <MudButton Variant="Variant.Filled"
-                           Color="Color.Primary"
-                           Href="/account/login"
-                           Style="margin-top: 24px;">
-                    로그인하기
-                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/account/login" DropShadow="false">로그인하기</MudButton>
             }
-        </MudPaper>
+        </EmptyState>
     }
     else
     {
-        <MudText Typo="Typo.h4" Style="font-weight: 700; margin-bottom: 24px;">
+        <MudText Typo="Typo.h4" Class="mb-6">
             <MudIcon Icon="@Icons.Material.Outlined.Create" Style="vertical-align: middle;" />
             글쓰기 - @category.Name
         </MudText>

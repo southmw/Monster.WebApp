@@ -20,30 +20,22 @@
     }
     else if (_post == null)
     {
-        <MudPaper Elevation="0" Style="padding: 64px; text-align: center; border: 1px solid rgba(0, 0, 0, 0.08);">
-            <MudIcon Icon="@Icons.Material.Outlined.Error" Size="Size.Large" Color="Color.Error" Style="margin-bottom: 16px;" />
-            <MudText Typo="Typo.h6" Color="Color.Error">게시글을 찾을 수 없습니다</MudText>
-        </MudPaper>
+        <EmptyState Icon="@Icons.Material.Outlined.Error"
+                    Title="게시글을 찾을 수 없습니다"
+                    Severity="Severity.Error" />
     }
     else if (!_canEdit)
     {
-        <MudPaper Elevation="0" Style="padding: 64px; text-align: center; border: 1px solid rgba(0, 0, 0, 0.08);">
-            <MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Large" Color="Color.Error" Style="margin-bottom: 16px;" />
-            <MudText Typo="Typo.h6" Color="Color.Error">수정 권한이 없습니다</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-top: 8px;">
-                @_errorMessage
-            </MudText>
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       Href="@($"/board/{CategoryUrl}/{PostId}")"
-                       Style="margin-top: 24px;">
-                게시글로 돌아가기
-            </MudButton>
-        </MudPaper>
+        <EmptyState Icon="@Icons.Material.Outlined.Lock"
+                    Title="수정 권한이 없습니다"
+                    Description="@_errorMessage"
+                    Severity="Severity.Error">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/board/{CategoryUrl}/{PostId}")" DropShadow="false">게시글로 돌아가기</MudButton>
+        </EmptyState>
     }
     else
     {
-        <MudText Typo="Typo.h4" Style="font-weight: 700; margin-bottom: 24px;">
+        <MudText Typo="Typo.h4" Class="mb-6">
             <MudIcon Icon="@Icons.Material.Outlined.Edit" Style="vertical-align: middle;" />
             게시글 수정 - @_post.Category.Name
         </MudText>

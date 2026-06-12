@@ -1,46 +1,258 @@
-/* ===== Board Index Styles ===== */
-.category-card {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    cursor: pointer;
+/* =====================================================================
+   Custom — 페이지/컴포넌트 스타일
+   색상은 MudBlazor 팔레트 변수(--mud-palette-*)를 사용해 라이트/다크 자동 대응.
+   하드코딩 색상 금지 — 소프트 틴트는 color-mix()로 파생.
+   ===================================================================== */
+
+/* ===== 공통 카드 ===== */
+.content-card {
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 12px;
+    background: var(--mud-palette-surface);
     overflow: hidden;
 }
 
-.mud-theme-light .category-card {
-    border: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.mud-theme-dark .category-card {
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.category-card:hover {
-    transform: translateY(-4px);
-    border-color: rgba(99, 102, 241, 0.3);
-}
-
-.mud-theme-light .category-card:hover {
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-}
-
-.mud-theme-dark .category-card:hover {
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
-}
-
-.category-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
+.content-card-header {
     display: flex;
     align-items: center;
-    justify-content: center;
-    margin-bottom: 16px;
+    gap: 8px;
+    padding: 16px 20px 12px;
 }
 
+/* ===== 페이지 헤더 ===== */
 .page-header {
     margin-bottom: 32px;
 }
 
-/* ===== Post List Styles ===== */
+/* ===== 홈: 히어로 ===== */
+.home-hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    background-color: #0f172a; /* 다크 사이드바와 동일한 브랜드 캔버스 (라이트/다크 공통) */
+    background-image:
+        radial-gradient(ellipse 60% 120% at 85% -10%, rgba(99, 102, 241, 0.45), transparent 60%),
+        radial-gradient(ellipse 50% 100% at 10% 110%, rgba(129, 140, 248, 0.25), transparent 55%);
+    padding: clamp(28px, 5vw, 48px);
+}
+
+.home-hero-title {
+    color: #f8fafc;
+    font-weight: 800 !important;
+}
+
+.home-hero-subtitle {
+    color: rgba(248, 250, 252, 0.75);
+}
+
+.home-hero-outline-btn {
+    color: #f8fafc !important;
+    border-color: rgba(248, 250, 252, 0.4) !important;
+}
+
+.home-hero-outline-btn:hover {
+    border-color: #f8fafc !important;
+    background-color: rgba(248, 250, 252, 0.08) !important;
+}
+
+/* ===== 홈: 최근/인기 피드 (탭 통합 카드) ===== */
+.home-feed-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+}
+
+.home-feed-tabs {
+    display: flex;
+    gap: 4px;
+}
+
+.home-feed-tab {
+    appearance: none;
+    border: none;
+    background: transparent;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--mud-palette-text-secondary);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.home-feed-tab:hover {
+    background-color: color-mix(in srgb, var(--mud-palette-primary) 6%, transparent);
+}
+
+.home-feed-tab-active {
+    background-color: var(--mud-palette-primary);
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.home-feed-tab-active:hover {
+    background-color: var(--mud-palette-primary);
+}
+
+.home-feed-more {
+    flex-shrink: 0;
+    font-size: 0.8125rem;
+    color: var(--mud-palette-text-secondary);
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+
+.home-feed-more:hover {
+    color: var(--mud-palette-primary);
+}
+
+.home-post-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.home-post-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 20px;
+    text-decoration: none;
+    color: inherit;
+    border-bottom: 1px solid var(--mud-palette-table-lines);
+    transition: background-color 0.15s ease;
+}
+
+.home-post-item:last-child {
+    border-bottom: none;
+}
+
+.home-post-item:hover {
+    background-color: color-mix(in srgb, var(--mud-palette-primary) 5%, transparent);
+}
+
+.home-post-rank {
+    flex-shrink: 0;
+    width: 22px;
+    font-size: 0.875rem;
+    font-weight: 800;
+    color: var(--mud-palette-primary);
+    text-align: center;
+}
+
+.home-post-text {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.home-post-title {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--mud-palette-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.home-post-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.home-post-meta .post-meta-dot {
+    margin: 0; /* flex gap이 간격을 담당 */
+}
+
+.home-post-category {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: 6px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--mud-palette-primary) 10%, transparent);
+    color: var(--mud-palette-primary);
+}
+
+.home-post-stat {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--mud-palette-text-secondary);
+    background: color-mix(in srgb, var(--mud-palette-text-secondary) 8%, transparent);
+}
+
+/* ===== 카테고리 카드 (홈 바로가기 + 게시판 목록 공용) ===== */
+.category-card {
+    display: block;
+    height: 100%;
+    padding: 20px;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 12px;
+    background: var(--mud-palette-surface);
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.category-card:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--mud-palette-primary) 40%, transparent);
+    box-shadow: 0 12px 24px -8px color-mix(in srgb, var(--mud-palette-primary) 18%, transparent);
+}
+
+.category-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: color-mix(in srgb, var(--mud-palette-primary) 12%, transparent);
+    color: var(--mud-palette-primary);
+}
+
+/* 홈 바로가기용 컴팩트 변형 — 세로 중앙 정렬 */
+.category-card-compact {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 4px;
+    padding: 16px 12px;
+}
+
+.category-card-compact .category-icon {
+    margin-bottom: 6px;
+}
+
+.category-card-name {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--mud-palette-text-primary);
+}
+
+.category-card-count {
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+/* ===== 게시글 목록 ===== */
 .post-header {
     display: flex;
     justify-content: space-between;
@@ -50,149 +262,230 @@
     gap: 16px;
 }
 
-.post-list-table {
+.post-search-bar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.post-search-field {
+    max-width: 250px;
+}
+
+.post-list {
+    border: 1px solid var(--mud-palette-lines-default);
     border-radius: 12px;
+    background: var(--mud-palette-surface);
     overflow: hidden;
 }
 
-.mud-theme-light .post-list-table {
-    border: 1px solid rgba(0, 0, 0, 0.08);
+.post-list-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    text-decoration: none;
+    color: inherit;
+    border-bottom: 1px solid var(--mud-palette-table-lines);
+    transition: background-color 0.15s ease;
 }
 
-.mud-theme-dark .post-list-table {
-    border: 1px solid rgba(255, 255, 255, 0.1);
+.post-list-item:last-child {
+    border-bottom: none;
 }
 
-.post-row {
-    transition: background 0.2s ease;
+.post-list-item:hover {
+    background-color: color-mix(in srgb, var(--mud-palette-primary) 5%, transparent);
 }
 
-.post-row:hover {
-    background: rgba(99, 102, 241, 0.04);
+.post-list-item-pinned {
+    background-color: color-mix(in srgb, var(--mud-palette-primary) 4%, transparent);
+    box-shadow: inset 3px 0 0 var(--mud-palette-primary);
 }
 
-.stat-badge {
+.post-list-main {
+    min-width: 0;
+    flex: 1;
+}
+
+.post-list-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.post-list-title {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--mud-palette-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.post-list-item-pinned .post-list-title {
+    font-weight: 700;
+}
+
+.post-pin-chip {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    background: var(--mud-palette-primary);
+    color: #ffffff;
+}
+
+.post-list-meta {
+    margin-top: 2px;
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.post-meta-dot {
+    margin: 0 6px;
+    color: var(--mud-palette-text-secondary);
+    opacity: 0.6;
+}
+
+.post-list-stats {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.post-stat {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 2px 8px;
-    border-radius: 6px;
     font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
 }
 
-/* ===== Post Detail Styles ===== */
+/* 페이징 */
+.post-paging {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 16px;
+    padding: 8px 0;
+    flex-wrap: wrap;
+}
+
+.post-paging-size {
+    width: 110px;
+    flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+    .post-search-bar {
+        justify-content: stretch;
+    }
+
+    .post-search-field {
+        max-width: none;
+        flex: 1;
+    }
+
+    .post-list-item {
+        padding: 12px 16px;
+    }
+
+    .post-paging {
+        flex-direction: column-reverse;
+        align-items: center;
+    }
+}
+
+/* ===== 게시글 상세 ===== */
 .post-content-section {
     border-radius: 12px;
-    padding: 32px;
+    padding: clamp(20px, 4vw, 32px);
     margin-bottom: 24px;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
 }
 
-.mud-theme-light .post-content-section {
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.mud-theme-dark .post-content-section {
-    background: #1e293b;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+.post-title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
 }
 
 .post-meta {
-    padding: 16px 0;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-bottom: 16px;
     margin-bottom: 24px;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+    font-size: 0.8125rem;
+    color: var(--mud-palette-text-secondary);
 }
 
-.mud-theme-light .post-meta {
-    border-bottom: 2px solid #f3f4f6;
+.post-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
-.mud-theme-dark .post-meta {
-    border-bottom: 2px solid #334155;
+.post-meta-spacer {
+    flex: 1;
+    min-width: 16px;
 }
 
+.comment-count {
+    color: var(--mud-palette-primary);
+}
+
+/* ===== 댓글 ===== */
 .comment-section {
     border-radius: 12px;
     padding: 24px;
     margin-top: 32px;
-}
-
-.mud-theme-light .comment-section {
-    background: #f9fafb;
-}
-
-.mud-theme-dark .comment-section {
-    background: #0f172a;
+    background: var(--mud-palette-background);
 }
 
 .comment-item {
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 16px;
     margin-bottom: 12px;
-}
-
-.mud-theme-light .comment-item {
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-.mud-theme-dark .comment-item {
-    background: #1e293b;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.reply-item {
-    border-radius: 8px;
-    padding: 12px;
-    margin-top: 8px;
-    margin-left: 32px;
-    border-left: 3px solid #667eea;
-}
-
-.mud-theme-light .reply-item {
-    background: #f9fafb;
-}
-
-.mud-theme-dark .reply-item {
-    background: #0f172a;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
 }
 
 .comment-form {
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 20px;
     margin-bottom: 20px;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
 }
 
-.mud-theme-light .comment-form {
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.mud-theme-dark .comment-form {
-    background: #1e293b;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* ===== Post Write Styles ===== */
+/* ===== 게시글 작성/수정 ===== */
 .write-container {
     border-radius: 12px;
-    padding: 32px;
-}
-
-.mud-theme-light .write-container {
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.mud-theme-dark .write-container {
-    background: #1e293b;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: clamp(20px, 4vw, 32px);
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
 }
 
 .form-section {
     margin-bottom: 1px;
 }
 
-/* ===== Compact Input Styles (Shared) ===== */
+/* ===== Compact Input (공용) ===== */
 .compact-input {
     margin-bottom: 8px;
 }
@@ -205,21 +498,66 @@
     min-height: 20px;
 }
 
-/* ===== HTML Content Styles (For WYSIWYG Editor Output) ===== */
+/* ===== 통계 타일 (프로필/관리자) ===== */
+.stat-card {
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 12px;
+}
+
+.stat-tile {
+    background: color-mix(in srgb, var(--mud-palette-primary) 6%, var(--mud-palette-surface)) !important;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 12px !important;
+}
+
+/* ===== 빈/에러 상태 (EmptyState 컴포넌트) ===== */
+.empty-state {
+    padding: 64px 24px;
+    text-align: center;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 12px;
+    background: var(--mud-palette-surface);
+}
+
+.empty-state-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 16px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--mud-palette-text-secondary) 10%, transparent);
+    color: var(--mud-palette-text-secondary);
+}
+
+.empty-state-icon-error {
+    background: color-mix(in srgb, var(--mud-palette-error) 10%, transparent);
+    color: var(--mud-palette-error);
+}
+
+.empty-state-title {
+    color: var(--mud-palette-text-primary);
+}
+
+/* ===== HTML 본문 출력 (WYSIWYG 에디터 출력) ===== */
 .post-html-content,
 .comment-html-content {
     word-wrap: break-word;
     overflow-wrap: break-word;
+    line-height: 1.8;
+}
+
+.post-html-content {
+    font-size: 15px;
+}
+
+.comment-html-content {
+    line-height: 1.6;
 }
 
 .post-html-content img,
-.comment-html-content img {
-    max-width: 100%;
-    height: auto;
-    border-radius: 8px;
-    margin: 8px 0;
-}
-
+.comment-html-content img,
 .post-html-content video,
 .comment-html-content video {
     max-width: 100%;
@@ -255,35 +593,25 @@
 }
 
 .post-html-content blockquote {
-    border-left: 4px solid #667eea;
+    border-left: 4px solid var(--mud-palette-primary);
     padding-left: 16px;
     margin: 1em 0;
     font-style: italic;
-}
-
-.mud-theme-dark .post-html-content blockquote {
-    border-left-color: #818cf8;
+    color: var(--mud-palette-text-secondary);
 }
 
 .post-html-content pre {
-    background: #f5f5f5;
+    background: var(--mud-palette-background);
     padding: 16px;
     border-radius: 8px;
     overflow-x: auto;
-    font-family: monospace;
+    font-family: Consolas, Monaco, monospace;
 }
 
-.mud-theme-dark .post-html-content pre {
-    background: #1e293b;
-}
-
-.post-html-content a {
-    color: #667eea;
+.post-html-content a,
+.comment-html-content a {
+    color: var(--mud-palette-primary);
     text-decoration: underline;
-}
-
-.mud-theme-dark .post-html-content a {
-    color: #818cf8;
 }
 
 /* ===== Rich Text Editor (Quill 2 / Spillgebees) ===== */
@@ -301,23 +629,12 @@
 
 .post-html-content .ql-code-block-container,
 .comment-html-content .ql-code-block-container {
-    background: #f5f5f5;
+    background: var(--mud-palette-background);
     padding: 16px;
     border-radius: 8px;
     overflow-x: auto;
     font-family: Consolas, Monaco, monospace;
     font-size: 14px;
-}
-
-.mud-theme-dark .post-html-content .ql-code-block-container,
-.mud-theme-dark .comment-html-content .ql-code-block-container {
-    background: #1e293b;
-}
-
-.post-html-content img,
-.comment-html-content img {
-    max-width: 100%;
-    height: auto;
 }
 
 /* 동영상 링크 임베드 — YouTube/Vimeo (Quill video 임베드 = iframe.ql-video)
@@ -342,33 +659,42 @@
     min-height: 320px;
 }
 
-/* Quill Editor Dark Mode Support */
+/* 에디터 톤 통일 (라이트/다크 공통 — 팔레트 변수 사용) */
+.ql-toolbar {
+    border-radius: 8px 8px 0 0;
+}
+
+.ql-container {
+    border-radius: 0 0 8px 8px;
+    font-family: inherit;
+}
+
 .mud-theme-dark .ql-toolbar {
-    background-color: #1e293b;
-    border-color: rgba(255, 255, 255, 0.1);
+    background-color: var(--mud-palette-surface);
+    border-color: var(--mud-palette-lines-default);
 }
 
 .mud-theme-dark .ql-container {
-    border-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--mud-palette-lines-default);
 }
 
 .mud-theme-dark .ql-editor {
-    background-color: #0f172a;
-    color: #e2e8f0;
+    background-color: var(--mud-palette-background);
+    color: var(--mud-palette-text-primary);
 }
 
 .mud-theme-dark .ql-toolbar .ql-stroke {
-    stroke: #94a3b8;
+    stroke: var(--mud-palette-text-secondary);
 }
 
 .mud-theme-dark .ql-toolbar .ql-fill {
-    fill: #94a3b8;
+    fill: var(--mud-palette-text-secondary);
 }
 
 .mud-theme-dark .ql-toolbar .ql-picker {
-    color: #94a3b8;
+    color: var(--mud-palette-text-secondary);
 }
 
 .mud-theme-dark .ql-editor.ql-blank::before {
-    color: #64748b;
+    color: var(--mud-palette-text-secondary);
 }

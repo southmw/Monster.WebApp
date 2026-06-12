@@ -1,7 +1,11 @@
 @inherits LayoutComponentBase
 @using Monster.WebApp.Shared
+@using MudBlazor.Services
 @inject IHttpContextAccessor HttpContextAccessor
 @inject IJSRuntime JSRuntime
+@inject IBrowserViewportService BrowserViewportService
+@implements IBrowserViewportObserver
+@implements IAsyncDisposable
 
 <MudThemeProvider @ref="_mudThemeProvider" Theme="_theme" @bind-IsDarkMode="_isDarkMode" />
 <MudPopoverProvider />
@@ -9,14 +13,14 @@
 <MudSnackbarProvider />
 
 <MudLayout>
-    <MudAppBar Elevation="0" Style="background-color: var(--mud-palette-appbar-background); color: var(--mud-palette-appbar-text);">
+    <MudAppBar Elevation="0" Class="app-header">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
-        <MudText Typo="Typo.h6" Class="ml-3" Style="font-weight: 700;">Southmw</MudText>
+        <MudLink Href="/" Underline="Underline.None" Class="ml-3 app-brand">Southmw<span class="app-brand-dot">.</span></MudLink>
         <MudSpacer />
-        
+
         @if (IsUserAuthenticated())
         {
-            <MudText Typo="Typo.body2" Class="mr-3" Style="color: var(--mud-palette-appbar-text);">
+            <MudText Typo="Typo.body2" Class="mr-3 d-none d-sm-flex" Style="color: var(--mud-palette-appbar-text);">
                 @GetDisplayName() 님
             </MudText>
         }
@@ -57,21 +61,35 @@
             </NotAuthorized>
         </AuthorizeView>
     </MudAppBar>
-    
-    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0">
+
+    @* 데스크톱: 미니 레일(닫으면 아이콘만) / 모바일: 오버레이 *@
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0"
+               Variant="@(_isMobile ? DrawerVariant.Temporary : DrawerVariant.Mini)"
+               MiniWidth="68px">
         <NavMenu />
     </MudDrawer>
-    
-    <MudMainContent Class="pt-16 px-4">
-        <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-4">
+
+    <MudMainContent Class="pt-16 px-4 app-main">
+        <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-4 app-page">
             @Body
         </MudContainer>
+        <footer class="app-footer">
+            <MudContainer MaxWidth="MaxWidth.Large" Class="app-footer-inner">
+                <span class="app-footer-brand">Southmw<span class="app-brand-dot">.</span></span>
+                <span class="app-footer-copy">© @DateTime.Now.Year Southmw. 자유롭게 소통하고 정보를 공유하는 커뮤니티.</span>
+                <nav class="app-footer-nav">
+                    <MudLink Href="/" Typo="Typo.caption" Color="Color.Secondary">홈</MudLink>
+                    <MudLink Href="/board" Typo="Typo.caption" Color="Color.Secondary">게시판</MudLink>
+                </nav>
+            </MudContainer>
+        </footer>
     </MudMainContent>
 </MudLayout>
 
 
 @code {
     private bool _drawerOpen = true;
+    private bool _isMobile = false;
     private bool _isDarkMode = false;
     private MudThemeProvider _mudThemeProvider = null!;
     private MudTheme _theme = CustomTheme.Theme;
@@ -92,7 +110,36 @@
                 _isDarkMode = false;
             }
             StateHasChanged();
+
+            // 화면 크기 구독 — 모바일/데스크톱에 따라 Drawer 동작 전환
+            await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
         }
+    }
+
+    Guid IBrowserViewportObserver.Id { get; } = Guid.NewGuid();
+
+    ResizeOptions IBrowserViewportObserver.ResizeOptions { get; } = new()
+    {
+        ReportRate = 250,
+        NotifyOnBreakpointOnly = true
+    };
+
+    Task IBrowserViewportObserver.NotifyBrowserViewportChangeAsync(BrowserViewportEventArgs args)
+    {
+        var isMobile = args.Breakpoint < Breakpoint.Md;
+        if (isMobile != _isMobile || args.IsImmediate)
+        {
+            _isMobile = isMobile;
+            // 모바일 진입 시 오버레이는 닫힌 상태로, 데스크톱 복귀 시 펼친 상태로
+            _drawerOpen = !isMobile;
+            return InvokeAsync(StateHasChanged);
+        }
+        return Task.CompletedTask;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await BrowserViewportService.UnsubscribeAsync(this);
     }
 
     private void DrawerToggle()

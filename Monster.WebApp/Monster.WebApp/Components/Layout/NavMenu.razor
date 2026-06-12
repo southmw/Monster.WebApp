@@ -6,51 +6,28 @@
 @rendermode InteractiveServer
 
 <MudNavMenu Class="mud-width-full">
-    <MudText Typo="Typo.subtitle2" Color="Color.Inherit" Class="px-4 mt-4 mb-2" Style="color: var(--mud-palette-drawer-text); opacity: 0.5;">MENU</MudText>
+    <span class="nav-section-label mt-4 mb-2">Menu</span>
 
     <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home" IconColor="Color.Inherit">홈</MudNavLink>
 
     @if (_categories != null && _categories.Any())
     {
-        <MudText Typo="Typo.subtitle2" Color="Color.Inherit" Class="px-4 mt-6 mb-2" Style="color: var(--mud-palette-drawer-text); opacity: 0.5;">BOARD</MudText>
-
+        <span class="nav-section-label mt-6 mb-2">Board</span>
 
         @foreach (var category in _categories)
         {
-            <MudNavLink Href="@($"/board/{category.UrlSlug}")" Match="NavLinkMatch.Prefix" Icon="@GetCategoryIcon(category.UrlSlug)" IconColor="Color.Inherit">@category.Name</MudNavLink>
+            <MudNavLink Href="@($"/board/{category.UrlSlug}")" Match="NavLinkMatch.Prefix" Icon="@Monster.WebApp.Shared.CategoryDisplayHelper.GetIcon(category.UrlSlug)" IconColor="Color.Inherit">@category.Name</MudNavLink>
         }
     }
 
     @if (_isAdmin)
     {
-        <MudText Typo="Typo.subtitle2" Color="Color.Inherit" Class="px-4 mt-6 mb-2" Style="color: var(--mud-palette-drawer-text); opacity: 0.5;">ADMIN</MudText>
+        <span class="nav-section-label mt-6 mb-2">Admin</span>
 
         <MudNavLink Href="/admin" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard" IconColor="Color.Inherit">대시보드</MudNavLink>
         <MudNavLink Href="/admin/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings" IconColor="Color.Inherit">설정</MudNavLink>
     }
 </MudNavMenu>
-
-<style>
-    /* Override NavLink styles for better contrast in dark sidebar */
-    .mud-nav-link {
-        color: var(--mud-palette-drawer-text) !important;
-        border-radius: 8px;
-        margin: 0 8px;
-    }
-
-    .mud-nav-link:hover:not(.mud-nav-link-disabled) {
-        background-color: rgba(255,255,255,0.1) !important;
-    }
-
-    .mud-nav-link.active:not(.mud-nav-link-disabled) {
-        background-color: var(--mud-palette-primary) !important;
-        color: #ffffff !important;
-    }
-
-    .mud-nav-link .mud-icon-root {
-        color: inherit !important;
-    }
-</style>
 
 @code {
     private bool _isAdmin = false;
@@ -89,17 +66,5 @@
             // 로드 실패 시 기본 메뉴(홈)만 표시 — 네비게이션 전체가 깨지지 않도록
             Logger.LogError(ex, "네비게이션 메뉴 데이터 로드 실패");
         }
-    }
-
-    private string GetCategoryIcon(string urlSlug)
-    {
-        return urlSlug switch
-        {
-            "free" => Icons.Material.Filled.Chat,
-            "questions" => Icons.Material.Filled.Help,
-            "info" => Icons.Material.Filled.Info,
-            "notice" => Icons.Material.Filled.Announcement,
-            _ => Icons.Material.Filled.Article
-        };
     }
 }

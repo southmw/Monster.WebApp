@@ -1,6 +1,7 @@
 @page "/"
 @using Monster.WebApp.Services.Board
 @using Monster.WebApp.Models.Board
+@using Monster.WebApp.Shared
 @inject CategoryService CategoryService
 @inject PostService PostService
 @rendermode InteractiveServer
@@ -9,126 +10,117 @@
 
 @if (_isLoading)
 {
-    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Class="d-flex mx-auto mt-8" />
+    <!-- 스켈레톤 로딩: 실제 레이아웃과 동일한 골격 표시 -->
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="180px" Class="rounded-xl mb-6" />
+    <MudPaper Elevation="0" Class="content-card pa-4">
+        <MudSkeleton Width="35%" Height="32px" Class="mb-3" />
+        @for (var j = 0; j < 6; j++)
+        {
+            <MudSkeleton Width="@($"{92 - j * 6}%")" Height="20px" Class="my-3" />
+        }
+    </MudPaper>
 }
 else
 {
     <!-- Hero Section -->
-    <MudPaper Class="pa-6 mb-6" Style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px;">
-        <MudText Typo="Typo.h4" Style="color: white; font-weight: 700;">환영합니다!</MudText>
-        <MudText Typo="Typo.body1" Style="color: rgba(255,255,255,0.9);" Class="mt-2">
-            자유롭게 소통하고 정보를 공유하는 커뮤니티입니다.
-        </MudText>
-        <AuthorizeView>
-            <NotAuthorized>
-                <MudStack Row="true" Spacing="2" Class="mt-4">
-                    <MudButton Variant="Variant.Filled" Color="Color.Default" Href="/account/login">로그인</MudButton>
-                    <MudButton Variant="Variant.Outlined" Style="color: white; border-color: white;" Href="/account/register">회원가입</MudButton>
-                </MudStack>
-            </NotAuthorized>
-        </AuthorizeView>
-    </MudPaper>
+    <section class="home-hero mb-6">
+        <div class="home-hero-content">
+            <MudText Typo="Typo.h4" Class="home-hero-title">환영합니다<span class="app-brand-dot">.</span></MudText>
+            <MudText Typo="Typo.body1" Class="home-hero-subtitle mt-2">
+                자유롭게 소통하고 정보를 공유하는 커뮤니티입니다.
+            </MudText>
+            <AuthorizeView>
+                <NotAuthorized>
+                    <MudStack Row="true" Spacing="2" Class="mt-5">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/account/register" DropShadow="false">시작하기</MudButton>
+                        <MudButton Variant="Variant.Outlined" Class="home-hero-outline-btn" Href="/account/login">로그인</MudButton>
+                    </MudStack>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+    </section>
 
     <!-- Main Content Grid -->
     <MudGrid Spacing="3">
-        <!-- Recent Posts -->
-        <MudItem xs="12" md="6">
-            <MudCard Elevation="2">
-                <MudCardHeader>
-                    <CardHeaderContent>
-                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                            <MudIcon Icon="@Icons.Material.Filled.NewReleases" Color="Color.Primary" />
-                            <MudText Typo="Typo.h6" Style="font-weight: 600;">최근 게시글</MudText>
-                        </MudStack>
-                    </CardHeaderContent>
-                </MudCardHeader>
-                <MudCardContent Class="pt-0">
-                    @if (_recentPosts.Any())
-                    {
-                        <MudList T="Post" Dense="true">
-                            @foreach (var post in _recentPosts)
-                            {
-                                <MudListItem T="Post" Href="@($"/board/{post.Category.UrlSlug}/{post.Id}")" Class="rounded mb-1" Style="cursor: pointer;">
-                                    <div class="d-flex justify-space-between align-center" style="width: 100%;">
-                                        <div style="min-width: 0; flex: 1;">
-                                            <MudText Typo="Typo.body2" Class="text-truncate" Style="font-weight: 500;">@post.Title</MudText>
-                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                @post.Category.Name · @post.AuthorNickname · @post.CreatedAt.ToLocalTime().ToString("MM/dd HH:mm")
-                                            </MudText>
-                                        </div>
-                                        <MudChip T="string" Size="Size.Small" Color="Color.Default" Class="ml-2">@post.ViewCount</MudChip>
-                                    </div>
-                                </MudListItem>
-                            }
-                        </MudList>
-                    }
-                    else
-                    {
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-center py-4">
-                            게시글이 없습니다.
-                        </MudText>
-                    }
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
+        <!-- 최근/인기 피드 (탭 통합 카드) -->
+        <MudItem xs="12">
+            <MudPaper Elevation="0" Class="content-card">
+                <div class="home-feed-header">
+                    <div class="home-feed-tabs" role="tablist">
+                        <button type="button" role="tab" aria-selected="@(_activeTab == FeedTab.Recent)"
+                                class="home-feed-tab @(_activeTab == FeedTab.Recent ? "home-feed-tab-active" : "")"
+                                @onclick="() => _activeTab = FeedTab.Recent">
+                            최근 게시글
+                        </button>
+                        <button type="button" role="tab" aria-selected="@(_activeTab == FeedTab.Popular)"
+                                class="home-feed-tab @(_activeTab == FeedTab.Popular ? "home-feed-tab-active" : "")"
+                                @onclick="() => _activeTab = FeedTab.Popular">
+                            인기 게시글
+                        </button>
+                    </div>
+                    <a class="home-feed-more" href="/board">더보기 ›</a>
+                </div>
 
-        <!-- Popular Posts -->
-        <MudItem xs="12" md="6">
-            <MudCard Elevation="2">
-                <MudCardHeader>
-                    <CardHeaderContent>
-                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                            <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Color="Color.Error" />
-                            <MudText Typo="Typo.h6" Style="font-weight: 600;">인기 게시글</MudText>
-                        </MudStack>
-                    </CardHeaderContent>
-                </MudCardHeader>
-                <MudCardContent Class="pt-0">
-                    @if (_popularPosts.Any())
-                    {
-                        <MudList T="Post" Dense="true">
-                            @foreach (var post in _popularPosts)
-                            {
-                                <MudListItem T="Post" Href="@($"/board/{post.Category.UrlSlug}/{post.Id}")" Class="rounded mb-1" Style="cursor: pointer;">
-                                    <div class="d-flex justify-space-between align-center" style="width: 100%;">
-                                        <div style="min-width: 0; flex: 1;">
-                                            <MudText Typo="Typo.body2" Class="text-truncate" Style="font-weight: 500;">@post.Title</MudText>
-                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                @post.Category.Name · @post.AuthorNickname · 조회 @post.ViewCount
-                                            </MudText>
-                                        </div>
-                                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="ml-2">@post.VoteCount</MudChip>
-                                    </div>
-                                </MudListItem>
-                            }
-                        </MudList>
-                    }
-                    else
-                    {
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-center py-4">
-                            게시글이 없습니다.
-                        </MudText>
-                    }
-                </MudCardContent>
-            </MudCard>
+                @{ var feedPosts = _activeTab == FeedTab.Recent ? _recentPosts : _popularPosts; }
+                @if (feedPosts.Any())
+                {
+                    <div class="home-post-list">
+                        @{ var rank = 1; }
+                        @foreach (var post in feedPosts)
+                        {
+                            <a class="home-post-item" href="@($"/board/{post.Category.UrlSlug}/{post.Id}")">
+                                @if (_activeTab == FeedTab.Popular)
+                                {
+                                    <span class="home-post-rank">@(rank++)</span>
+                                }
+                                <div class="home-post-text">
+                                    <span class="home-post-title">@post.Title</span>
+                                    <span class="home-post-meta">
+                                        <span class="home-post-category">@post.Category.Name</span>
+                                        <span>@post.AuthorNickname</span>
+                                        <span class="post-meta-dot">·</span>
+                                        <span>@TimeDisplayHelper.ToRelative(post.CreatedAt)</span>
+                                    </span>
+                                </div>
+                                @if (_activeTab == FeedTab.Recent)
+                                {
+                                    <span class="home-post-stat">
+                                        <MudIcon Icon="@Icons.Material.Outlined.Visibility" Size="Size.Small" />@post.ViewCount
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="home-post-stat">
+                                        <MudIcon Icon="@Icons.Material.Outlined.ThumbUp" Size="Size.Small" />@post.VoteCount
+                                    </span>
+                                }
+                            </a>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-center py-8">
+                        아직 게시글이 없습니다.
+                    </MudText>
+                }
+            </MudPaper>
         </MudItem>
 
         <!-- Category Cards -->
         <MudItem xs="12">
-            <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">게시판 바로가기</MudText>
+            <MudText Typo="Typo.h6" Class="mb-3">게시판 바로가기</MudText>
             <MudGrid Spacing="2">
                 @foreach (var category in _categories)
                 {
                     <MudItem xs="6" sm="4" md="3">
-                        <MudCard Elevation="2" Class="category-card" Style="cursor: pointer;" @onclick="@(() => NavigateToCategory(category.UrlSlug))">
-                            <MudCardContent Class="text-center pa-4">
-                                <MudIcon Icon="@GetCategoryIcon(category.UrlSlug)" Size="Size.Large" Color="Color.Primary" />
-                                <MudText Typo="Typo.subtitle1" Class="mt-2" Style="font-weight: 600;">@category.Name</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                    @(category.Posts?.Count(p => !p.IsDeleted) ?? 0)개의 게시글
-                                </MudText>
-                            </MudCardContent>
-                        </MudCard>
+                        <a class="category-card category-card-compact" href="@($"/board/{category.UrlSlug}")">
+                            <span class="category-icon">
+                                <MudIcon Icon="@CategoryDisplayHelper.GetIcon(category.UrlSlug)" />
+                            </span>
+                            <span class="category-card-name">@category.Name</span>
+                            <span class="category-card-count">@(category.Posts?.Count(p => !p.IsDeleted) ?? 0)개의 게시글</span>
+                        </a>
                     </MudItem>
                 }
             </MudGrid>
@@ -136,49 +128,22 @@ else
     </MudGrid>
 }
 
-<style>
-    .category-card {
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .category-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 24px rgba(0,0,0,0.15) !important;
-    }
-</style>
-
 @code {
+    private enum FeedTab { Recent, Popular }
+
     private bool _isLoading = true;
+    private FeedTab _activeTab = FeedTab.Recent;
     private List<Category> _categories = new();
     private List<Post> _recentPosts = new();
     private List<Post> _popularPosts = new();
-
-    [Inject]
-    private NavigationManager NavigationManager { get; set; } = default!;
 
     protected override async Task OnInitializedAsync()
     {
         // 순차적으로 호출하여 DbContext 동시 접근 방지
         _categories = await CategoryService.GetAllCategoriesAsync();
-        _recentPosts = await PostService.GetRecentPostsAsync(5);
-        _popularPosts = await PostService.GetPopularPostsAsync(5);
+        _recentPosts = await PostService.GetRecentPostsAsync(8);
+        _popularPosts = await PostService.GetPopularPostsAsync(8);
 
         _isLoading = false;
-    }
-
-    private void NavigateToCategory(string urlSlug)
-    {
-        NavigationManager.NavigateTo($"/board/{urlSlug}");
-    }
-
-    private string GetCategoryIcon(string urlSlug)
-    {
-        return urlSlug switch
-        {
-            "free" => Icons.Material.Filled.Chat,
-            "questions" => Icons.Material.Filled.Help,
-            "info" => Icons.Material.Filled.Info,
-            "notice" => Icons.Material.Filled.Announcement,
-            _ => Icons.Material.Filled.Article
-        };
     }
 }

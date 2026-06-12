@@ -27,15 +27,15 @@ else if (_user == null)
 else
 {
     <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
-        <!-- Profile Header -->
-        <MudPaper Class="pa-6 mb-4" Style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px;">
+        <!-- Profile Header — 홈 히어로와 동일한 브랜드 캔버스 -->
+        <section class="home-hero pa-6 mb-4">
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="4">
-                <MudAvatar Size="Size.Large" Style="width: 80px; height: 80px; font-size: 2rem; background-color: rgba(255,255,255,0.2); color: white;">
+                <MudAvatar Size="Size.Large" Style="width: 80px; height: 80px; font-size: 2rem; background-color: rgba(255,255,255,0.15); color: white;">
                     @(_user.DisplayName?.FirstOrDefault().ToString().ToUpper() ?? "U")
                 </MudAvatar>
                 <div>
-                    <MudText Typo="Typo.h5" Style="color: white; font-weight: 700;">@_user.DisplayName</MudText>
-                    <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.8);">@@@_user.Username</MudText>
+                    <MudText Typo="Typo.h5" Class="home-hero-title">@_user.DisplayName</MudText>
+                    <MudText Typo="Typo.body2" Class="home-hero-subtitle">@@@_user.Username</MudText>
                     <MudStack Row="true" Spacing="1" Class="mt-2">
                         @foreach (var userRole in _user.UserRoles)
                         {
@@ -46,7 +46,7 @@ else
                     </MudStack>
                 </div>
             </MudStack>
-        </MudPaper>
+        </section>
 
         <MudGrid Spacing="3">
             <!-- Profile Information -->
@@ -56,7 +56,7 @@ else
                         <CardHeaderContent>
                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                                 <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary" />
-                                <MudText Typo="Typo.h6" Style="font-weight: 600;">기본 정보</MudText>
+                                <MudText Typo="Typo.h6">기본 정보</MudText>
                             </MudStack>
                         </CardHeaderContent>
                         <CardHeaderActions>
@@ -115,7 +115,7 @@ else
                         <CardHeaderContent>
                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                                 <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Primary" />
-                                <MudText Typo="Typo.h6" Style="font-weight: 600;">비밀번호 변경</MudText>
+                                <MudText Typo="Typo.h6">비밀번호 변경</MudText>
                             </MudStack>
                         </CardHeaderContent>
                     </MudCardHeader>
@@ -156,33 +156,33 @@ else
                         <CardHeaderContent>
                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                                 <MudIcon Icon="@Icons.Material.Filled.BarChart" Color="Color.Primary" />
-                                <MudText Typo="Typo.h6" Style="font-weight: 600;">활동 통계</MudText>
+                                <MudText Typo="Typo.h6">활동 통계</MudText>
                             </MudStack>
                         </CardHeaderContent>
                     </MudCardHeader>
                     <MudCardContent>
                         <MudGrid Spacing="3">
                             <MudItem xs="6" sm="3">
-                                <MudPaper Class="pa-4 text-center" Elevation="0" Style="background-color: #f5f5f5; border-radius: 12px;">
-                                    <MudText Typo="Typo.h4" Color="Color.Primary" Style="font-weight: 700;">@_postCount</MudText>
+                                <MudPaper Class="pa-4 text-center stat-tile" Elevation="0">
+                                    <MudText Typo="Typo.h4" Color="Color.Primary">@_postCount</MudText>
                                     <MudText Typo="Typo.caption" Color="Color.Secondary">작성 게시글</MudText>
                                 </MudPaper>
                             </MudItem>
                             <MudItem xs="6" sm="3">
-                                <MudPaper Class="pa-4 text-center" Elevation="0" Style="background-color: #f5f5f5; border-radius: 12px;">
-                                    <MudText Typo="Typo.h4" Color="Color.Primary" Style="font-weight: 700;">@_commentCount</MudText>
+                                <MudPaper Class="pa-4 text-center stat-tile" Elevation="0">
+                                    <MudText Typo="Typo.h4" Color="Color.Primary">@_commentCount</MudText>
                                     <MudText Typo="Typo.caption" Color="Color.Secondary">작성 댓글</MudText>
                                 </MudPaper>
                             </MudItem>
                             <MudItem xs="6" sm="3">
-                                <MudPaper Class="pa-4 text-center" Elevation="0" Style="background-color: #f5f5f5; border-radius: 12px;">
-                                    <MudText Typo="Typo.h4" Color="Color.Primary" Style="font-weight: 700;">@_totalViews</MudText>
+                                <MudPaper Class="pa-4 text-center stat-tile" Elevation="0">
+                                    <MudText Typo="Typo.h4" Color="Color.Primary">@_totalViews</MudText>
                                     <MudText Typo="Typo.caption" Color="Color.Secondary">총 조회수</MudText>
                                 </MudPaper>
                             </MudItem>
                             <MudItem xs="6" sm="3">
-                                <MudPaper Class="pa-4 text-center" Elevation="0" Style="background-color: #f5f5f5; border-radius: 12px;">
-                                    <MudText Typo="Typo.h4" Color="Color.Primary" Style="font-weight: 700;">@_totalVotes</MudText>
+                                <MudPaper Class="pa-4 text-center stat-tile" Elevation="0">
+                                    <MudText Typo="Typo.h4" Color="Color.Primary">@_totalVotes</MudText>
                                     <MudText Typo="Typo.caption" Color="Color.Secondary">받은 추천</MudText>
                                 </MudPaper>
                             </MudItem>
