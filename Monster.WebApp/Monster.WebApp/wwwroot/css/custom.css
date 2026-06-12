@@ -29,11 +29,18 @@
     position: relative;
     overflow: hidden;
     border-radius: 16px;
-    background-color: #0f172a; /* 다크 사이드바와 동일한 브랜드 캔버스 (라이트/다크 공통) */
+    border: 1px solid transparent;
+    background-color: #0f172a; /* 다크 사이드바와 동일한 브랜드 캔버스 (라이트 모드) */
     background-image:
         radial-gradient(ellipse 60% 120% at 85% -10%, rgba(99, 102, 241, 0.45), transparent 60%),
         radial-gradient(ellipse 50% 100% at 10% 110%, rgba(129, 140, 248, 0.25), transparent 55%);
     padding: clamp(28px, 5vw, 48px);
+}
+
+/* 다크 모드: 페이지 배경(#0F172A)과 동일해 묻히므로 Surface 톤 + 테두리로 구분 */
+.mud-theme-dark .home-hero {
+    background-color: var(--mud-palette-surface);
+    border-color: var(--mud-palette-lines-default);
 }
 
 .home-hero-title {
@@ -119,7 +126,7 @@
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 12px 20px;
+    padding: 7px 20px;
     text-decoration: none;
     color: inherit;
     border-bottom: 1px solid var(--mud-palette-table-lines);
@@ -148,7 +155,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0; /* 줄 간격만으로 제목/메타를 붙여 행 높이 축소 */
 }
 
 .home-post-title {
