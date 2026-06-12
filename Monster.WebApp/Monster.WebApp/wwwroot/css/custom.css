@@ -705,3 +705,34 @@
 .mud-theme-dark .ql-editor.ql-blank::before {
     color: var(--mud-palette-text-secondary);
 }
+
+/* ===== 알림 (NotificationBell 드롭다운 + /notifications 페이지) ===== */
+
+.notification-menu {
+    min-width: 320px;
+    max-width: 380px;
+}
+
+.notification-menu-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+}
+
+.notification-item {
+    cursor: pointer;
+}
+
+.notification-item-unread {
+    background-color: color-mix(in srgb, var(--mud-palette-primary) 6%, transparent);
+    box-shadow: inset 3px 0 0 var(--mud-palette-primary);
+}
+
+.notification-item-title {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 280px;
+}

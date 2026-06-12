@@ -1,0 +1,204 @@
+@page "/search"
+@using Monster.WebApp.Models.Board
+@using Monster.WebApp.Services.Board
+@using Monster.WebApp.Shared
+@inject PostService PostService
+@inject CategoryAccessService CategoryAccessService
+@inject NavigationManager NavigationManager
+@inject ILogger<Search> Logger
+@rendermode InteractiveServer
+
+<PageTitle>통합 검색 - Southmw</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <div class="post-header">
+        <div>
+            <MudText Typo="Typo.h4">통합 검색</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-1">
+                전체 게시판에서 제목과 본문을 검색합니다.
+            </MudText>
+        </div>
+    </div>
+
+    <div class="post-search-bar">
+        @if (!string.IsNullOrWhiteSpace(_activeQuery))
+        {
+            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small"
+                     OnClose="ClearSearch" Style="margin: 0;">
+                '@_activeQuery' @(_totalCount)건
+            </MudChip>
+        }
+        <MudTextField @bind-Value="_searchQuery" Variant="Variant.Outlined"
+                      Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search"
+                      OnAdornmentClick="DoSearch" Margin="Margin.Dense"
+                      OnKeyUp="@((e) => { if (e.Key == "Enter") DoSearch(); })"
+                      Placeholder="검색어를 입력하세요" Clearable="true" Class="post-search-field" />
+    </div>
+
+    @if (_isLoading)
+    {
+        <MudPaper Elevation="0" Class="post-list">
+            @for (var i = 0; i < 6; i++)
+            {
+                <div class="pa-4">
+                    <MudSkeleton Width="@($"{85 - i * 5}%")" Height="20px" />
+                    <MudSkeleton Width="30%" Height="14px" Class="mt-1" />
+                </div>
+            }
+        </MudPaper>
+    }
+    else if (_loadFailed)
+    {
+        <EmptyState Icon="@Icons.Material.Outlined.ErrorOutline"
+                    Title="검색에 실패했습니다"
+                    Description="잠시 후 다시 시도해주세요."
+                    Severity="Severity.Error" />
+    }
+    else if (string.IsNullOrWhiteSpace(_activeQuery))
+    {
+        <EmptyState Icon="@Icons.Material.Outlined.Search"
+                    Title="검색어를 입력하세요"
+                    Description="접근 가능한 모든 게시판의 게시글을 검색합니다." />
+    }
+    else if (_posts == null || _posts.Count == 0)
+    {
+        <EmptyState Icon="@Icons.Material.Outlined.SearchOff"
+                    Title="검색 결과가 없습니다"
+                    Description="@($"'{_activeQuery}'에 해당하는 게시글을 찾지 못했습니다.")">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="ClearSearch">검색 초기화</MudButton>
+        </EmptyState>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Class="post-list">
+            @foreach (var post in _posts)
+            {
+                <a class="post-list-item" href="@($"/board/{post.Category.UrlSlug}/{post.Id}")">
+                    <div class="post-list-main">
+                        <div class="post-list-title-row">
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                     Icon="@CategoryDisplayHelper.GetIcon(post.Category.UrlSlug)" Style="margin: 0;">
+                                @post.Category.Name
+                            </MudChip>
+                            <span class="post-list-title">@post.Title</span>
+                        </div>
+                        <div class="post-list-meta">
+                            <span>@post.AuthorNickname</span>
+                            <span class="post-meta-dot">·</span>
+                            <span>@TimeDisplayHelper.ToRelative(post.CreatedAt)</span>
+                        </div>
+                    </div>
+                    <div class="post-list-stats">
+                        <span class="post-stat" title="조회수">
+                            <MudIcon Icon="@Icons.Material.Outlined.Visibility" Size="Size.Small" />@post.ViewCount
+                        </span>
+                        <span class="post-stat" title="추천수">
+                            <MudIcon Icon="@Icons.Material.Outlined.ThumbUp" Size="Size.Small" />@post.VoteCount
+                        </span>
+                    </div>
+                </a>
+            }
+        </MudPaper>
+
+        <div class="post-paging">
+            <MudPagination Count="@((int)Math.Ceiling(_totalCount / (double)PageSize))"
+                           Selected="@_currentPage"
+                           SelectedChanged="OnPageChanged"
+                           Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           Size="Size.Small"
+                           Class="post-paging-pages" />
+        </div>
+    }
+</MudContainer>
+
+@code {
+    private const int PageSize = 20;
+
+    // 검색어/페이지를 URL 쿼리로 보존 (뒤로가기/새로고침 시 상태 유지 — PostList와 동일 패턴)
+    [SupplyParameterFromQuery(Name = "q")]
+    public string? Query { get; set; }
+
+    [SupplyParameterFromQuery(Name = "page")]
+    public int? Page { get; set; }
+
+    private List<Post>? _posts;
+    private int _totalCount;
+    private int _currentPage = 1;
+    private string _searchQuery = string.Empty;
+    private string _activeQuery = string.Empty;
+    private bool _isLoading;
+    private bool _loadFailed;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _currentPage = Page is > 0 ? Page.Value : 1;
+        _activeQuery = Query?.Trim() ?? string.Empty;
+        _searchQuery = _activeQuery;
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_activeQuery))
+        {
+            _posts = null;
+            _totalCount = 0;
+            return;
+        }
+
+        try
+        {
+            _loadFailed = false;
+            _isLoading = true;
+
+            // 접근 가능한 카테고리만 쿼리 술어로 선필터 — 비공개 카테고리 글은 제목조차 노출되지 않음
+            var accessibleCategories = await CategoryAccessService.GetAccessibleCategoriesAsync();
+            var categoryIds = accessibleCategories.Select(c => c.Id).ToList();
+
+            var (posts, totalCount) = await PostService.SearchPostsAsync(_activeQuery, categoryIds, _currentPage, PageSize);
+            _posts = posts;
+            _totalCount = totalCount;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "통합 검색 실패 (Query: {Query})", _activeQuery);
+            _loadFailed = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void NavigateWithState()
+    {
+        var uri = NavigationManager.GetUriWithQueryParameters(
+            "/search",
+            new Dictionary<string, object?>
+            {
+                ["q"] = string.IsNullOrWhiteSpace(_searchQuery) ? null : _searchQuery.Trim(),
+                ["page"] = _currentPage == 1 ? null : _currentPage
+            });
+        NavigationManager.NavigateTo(uri);
+    }
+
+    private void DoSearch()
+    {
+        _currentPage = 1;
+        NavigateWithState();
+    }
+
+    private void OnPageChanged(int page)
+    {
+        _currentPage = page;
+        NavigateWithState();
+    }
+
+    private void ClearSearch()
+    {
+        _searchQuery = string.Empty;
+        _currentPage = 1;
+        NavigateWithState();
+    }
+}

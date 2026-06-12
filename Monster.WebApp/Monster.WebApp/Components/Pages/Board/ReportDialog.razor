@@ -1,0 +1,69 @@
+@using Monster.WebApp.Models.Board
+@using Monster.WebApp.Services.Board
+@inject ReportService ReportService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Outlined.Flag" Class="mr-2" Style="vertical-align: middle;" />
+            @(CommentId == null ? "게시글 신고" : "댓글 신고")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudSelect T="ReportReason" @bind-Value="_reason" Label="신고 사유" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelectItem Value="ReportReason.Spam">스팸/광고</MudSelectItem>
+                <MudSelectItem Value="ReportReason.Abuse">욕설/비방</MudSelectItem>
+                <MudSelectItem Value="ReportReason.Adult">음란물/유해 콘텐츠</MudSelectItem>
+                <MudSelectItem Value="ReportReason.Privacy">개인정보 노출</MudSelectItem>
+                <MudSelectItem Value="ReportReason.Etc">기타</MudSelectItem>
+            </MudSelect>
+            <MudTextField @bind-Value="_detail" Label="상세 내용 (선택)" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Lines="3" MaxLength="1000" Counter="1000" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">취소</MudButton>
+        <MudButton OnClick="SubmitAsync" Color="Color.Error" Variant="Variant.Filled" Disabled="_isSubmitting">
+            @(_isSubmitting ? "접수 중..." : "신고")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private MudDialogInstance? MudDialog { get; set; }
+
+    [Parameter]
+    public int PostId { get; set; }
+
+    [Parameter]
+    public int? CommentId { get; set; }
+
+    private ReportReason _reason = ReportReason.Spam;
+    private string _detail = string.Empty;
+    private bool _isSubmitting;
+
+    private void Cancel() => MudDialog?.Cancel();
+
+    private async Task SubmitAsync()
+    {
+        _isSubmitting = true;
+        try
+        {
+            var (success, message) = await ReportService.CreateReportAsync(
+                PostId, CommentId, _reason, string.IsNullOrWhiteSpace(_detail) ? null : _detail);
+
+            Snackbar.Add(message, success ? Severity.Success : Severity.Warning);
+            if (success)
+            {
+                MudDialog?.Close(DialogResult.Ok(true));
+            }
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}

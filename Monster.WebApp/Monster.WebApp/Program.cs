@@ -142,6 +142,8 @@ namespace Monster.WebApp
             builder.Services.AddScoped<CategoryService>();
             builder.Services.AddScoped<PostService>();
             builder.Services.AddScoped<CommentService>();
+            builder.Services.AddScoped<NotificationService>();
+            builder.Services.AddScoped<ReportService>();
             builder.Services.AddScoped<FileUploadService>();
             // 익명 글 수정 비밀번호 전달용 (서킷 범위 — URL 노출 방지)
             builder.Services.AddScoped<PostEditVerificationState>();

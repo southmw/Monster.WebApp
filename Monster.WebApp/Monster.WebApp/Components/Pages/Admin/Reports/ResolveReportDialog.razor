@@ -1,0 +1,43 @@
+@* 신고 처리/기각 공통 다이얼로그 — 처리 모드에서만 "대상 콘텐츠 삭제" 옵션 노출 *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@(IsDismiss ? Icons.Material.Outlined.Block : Icons.Material.Outlined.TaskAlt)" Class="mr-2" Style="vertical-align: middle;" />
+            @(IsDismiss ? "신고 기각" : "신고 처리")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            @if (!IsDismiss)
+            {
+                <MudCheckBox T="bool" @bind-Value="_deleteContent" Color="Color.Error"
+                             Label="대상 콘텐츠 삭제 (동일 대상의 다른 대기 신고도 함께 처리됩니다)" />
+            }
+            <MudTextField @bind-Value="_note" Label="처리 메모 (선택)" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Lines="2" MaxLength="500" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">취소</MudButton>
+        <MudButton OnClick="Submit" Color="@(IsDismiss ? Color.Default : Color.Primary)" Variant="Variant.Filled">
+            @(IsDismiss ? "기각" : "처리")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private MudDialogInstance? MudDialog { get; set; }
+
+    [Parameter]
+    public bool IsDismiss { get; set; }
+
+    private bool _deleteContent;
+    private string _note = string.Empty;
+
+    private void Cancel() => MudDialog?.Cancel();
+
+    private void Submit() => MudDialog?.Close(DialogResult.Ok(
+        (DeleteContent: _deleteContent, Note: string.IsNullOrWhiteSpace(_note) ? null : _note)));
+}

@@ -20,17 +20,25 @@
         }
     }
 
-    @if (_isAdmin)
+    @if (_isAdmin || _isSubAdminOrHigher)
     {
         <span class="nav-section-label mt-6 mb-2">Admin</span>
 
-        <MudNavLink Href="/admin" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard" IconColor="Color.Inherit">대시보드</MudNavLink>
-        <MudNavLink Href="/admin/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings" IconColor="Color.Inherit">설정</MudNavLink>
+        @if (_isAdmin)
+        {
+            <MudNavLink Href="/admin" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard" IconColor="Color.Inherit">대시보드</MudNavLink>
+        }
+        <MudNavLink Href="/admin/reports" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Flag" IconColor="Color.Inherit">신고 관리</MudNavLink>
+        @if (_isAdmin)
+        {
+            <MudNavLink Href="/admin/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings" IconColor="Color.Inherit">설정</MudNavLink>
+        }
     }
 </MudNavMenu>
 
 @code {
     private bool _isAdmin = false;
+    private bool _isSubAdminOrHigher = false;
     private List<Monster.WebApp.Models.Board.Category>? _categories;
     private bool _isLoaded = false;
 
@@ -59,6 +67,7 @@
             {
                 var roleService = scope.ServiceProvider.GetRequiredService<RoleService>();
                 _isAdmin = await roleService.IsAdminAsync();
+                _isSubAdminOrHigher = await roleService.IsSubAdminOrHigherAsync();
             }
         }
         catch (Exception ex)

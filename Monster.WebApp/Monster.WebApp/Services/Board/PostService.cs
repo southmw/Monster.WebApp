@@ -60,6 +60,64 @@ public class PostService
         return (posts, totalCount);
     }
 
+    /// <summary>
+    /// 전체 게시판 통합 검색. 접근 가능한 카테고리 Id 목록을 쿼리 술어로 선필터해
+    /// 비공개 카테고리 글은 제목조차 노출되지 않음 — 호출부(페이지)가
+    /// CategoryAccessService.GetAccessibleCategoriesAsync()로 목록을 구해 전달할 것.
+    /// </summary>
+    public async Task<(List<Post> Posts, int TotalCount)> SearchPostsAsync(
+        string query,
+        IReadOnlyCollection<int> accessibleCategoryIds,
+        int page = 1,
+        int pageSize = 20)
+    {
+        if (string.IsNullOrWhiteSpace(query) || accessibleCategoryIds.Count == 0)
+            return (new List<Post>(), 0);
+
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var posts = context.Posts
+            .AsNoTracking()
+            .Include(p => p.Category)
+            .Where(p => !p.IsDeleted
+                     && accessibleCategoryIds.Contains(p.CategoryId)
+                     && (p.Title.Contains(query) || (p.SearchText ?? p.Content).Contains(query)));
+
+        var totalCount = await posts.CountAsync();
+
+        var results = await posts
+            .OrderByDescending(p => p.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return (results, totalCount);
+    }
+
+    /// <summary>
+    /// 사용자가 작성한 게시글 목록 (프로필 활동 탭용)
+    /// </summary>
+    public async Task<(List<Post> Posts, int TotalCount)> GetPostsByUserAsync(
+        int userId, int page = 1, int pageSize = 10)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var query = context.Posts
+            .AsNoTracking()
+            .Where(p => p.UserId == userId && !p.IsDeleted);
+
+        var totalCount = await query.CountAsync();
+
+        var posts = await query
+            .Include(p => p.Category)
+            .OrderByDescending(p => p.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return (posts, totalCount);
+    }
+
     public async Task<Post?> GetPostByIdAsync(int id)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();

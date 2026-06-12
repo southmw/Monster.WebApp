@@ -105,6 +105,11 @@
                     @(post.IsPinned ? "공지 해제" : "공지 등록")
                 </MudButton>
             }
+            <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                       OnClick="@(() => ShowReportDialog(null))"
+                       StartIcon="@Icons.Material.Outlined.Flag">
+                신고
+            </MudButton>
         </MudStack>
 
         <!-- 댓글 섹션 -->
@@ -179,6 +184,8 @@
                                                Color="Color.Default" OnClick="@(() => StartEditComment(comment))" />
                                 <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
                                                Color="Color.Error" OnClick="@(() => DeleteComment(comment))" />
+                                <MudIconButton Icon="@Icons.Material.Outlined.Flag" Size="Size.Small"
+                                               Color="Color.Default" title="신고" OnClick="@(() => ShowReportDialog(comment.Id))" />
                             </MudStack>
                         }
                     </div>
@@ -276,6 +283,8 @@
                                                        Color="Color.Default" OnClick="@(() => StartEditComment(reply))" />
                                         <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
                                                        Color="Color.Error" OnClick="@(() => DeleteComment(reply))" />
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Flag" Size="Size.Small"
+                                                       Color="Color.Default" title="신고" OnClick="@(() => ShowReportDialog(reply.Id))" />
                                     </MudStack>
                                 }
                             </div>
@@ -498,6 +507,19 @@
                 Snackbar.Add("게시글 삭제에 실패했습니다. 비밀번호를 확인해주세요.", Severity.Error);
             }
         }
+    }
+
+    /// <param name="commentId">null이면 게시글 신고, 값이 있으면 해당 댓글 신고</param>
+    private async Task ShowReportDialog(int? commentId)
+    {
+        var parameters = new DialogParameters<ReportDialog>
+        {
+            { x => x.PostId, PostId },
+            { x => x.CommentId, commentId }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        await DialogService.ShowAsync<ReportDialog>("신고", parameters, options);
     }
 
     private async Task<string?> ShowPasswordDialog(string title, string message)

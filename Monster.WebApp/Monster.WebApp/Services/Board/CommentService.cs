@@ -12,17 +12,23 @@ public class CommentService
     private readonly AuthService _authService;
     private readonly ContentSanitizer _contentSanitizer;
     private readonly FileUploadService _fileUploadService;
+    private readonly NotificationService _notificationService;
+    private readonly ILogger<CommentService> _logger;
 
     public CommentService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         AuthService authService,
         ContentSanitizer contentSanitizer,
-        FileUploadService fileUploadService)
+        FileUploadService fileUploadService,
+        NotificationService notificationService,
+        ILogger<CommentService> logger)
     {
         _contextFactory = contextFactory;
         _authService = authService;
         _contentSanitizer = contentSanitizer;
         _fileUploadService = fileUploadService;
+        _notificationService = notificationService;
+        _logger = logger;
     }
 
     public async Task<List<Comment>> GetCommentsByPostIdAsync(int postId)
@@ -75,7 +81,42 @@ public class CommentService
         context.Comments.Add(comment);
         await context.SaveChangesAsync();
 
+        // 알림 생성 실패가 댓글 등록을 깨지 않도록 격리
+        try
+        {
+            await _notificationService.CreateForCommentAsync(comment);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "댓글 알림 생성 실패 (CommentId: {CommentId})", comment.Id);
+        }
+
         return comment;
+    }
+
+    /// <summary>
+    /// 사용자가 작성한 댓글 목록 (프로필 활동 탭용). 삭제된 댓글과 삭제된 글의 댓글은 제외.
+    /// </summary>
+    public async Task<(List<Comment> Comments, int TotalCount)> GetCommentsByUserAsync(
+        int userId, int page = 1, int pageSize = 10)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var query = context.Comments
+            .AsNoTracking()
+            .Where(c => c.UserId == userId && !c.IsDeleted && !c.Post.IsDeleted);
+
+        var totalCount = await query.CountAsync();
+
+        var comments = await query
+            .Include(c => c.Post)
+            .ThenInclude(p => p.Category)
+            .OrderByDescending(c => c.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return (comments, totalCount);
     }
 
     public async Task<bool> UpdateCommentAsync(int id, string content, string? password = null)

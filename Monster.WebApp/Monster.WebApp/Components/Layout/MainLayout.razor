@@ -25,6 +25,13 @@
             </MudText>
         }
         
+        <MudIconButton Icon="@Icons.Material.Outlined.Search"
+                       Color="Color.Inherit"
+                       Href="/search"
+                       Class="mr-1" />
+
+        <NotificationBell />
+
         <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
                        Color="Color.Inherit"
                        OnClick="@ToggleDarkMode"

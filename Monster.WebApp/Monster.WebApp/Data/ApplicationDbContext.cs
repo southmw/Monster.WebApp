@@ -21,6 +21,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<UserRole> UserRoles { get; set; }
     public DbSet<CategoryAccess> CategoryAccesses { get; set; }
     public DbSet<PostVote> PostVotes { get; set; }
+    public DbSet<Notification> Notifications { get; set; }
+    public DbSet<Report> Reports { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -157,6 +159,54 @@ public class ApplicationDbContext : DbContext
 
             // Index for IP-based vote tracking (anonymous users)
             entity.HasIndex(e => new { e.PostId, e.IpAddress });
+        });
+
+        // Notification configuration
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasOne(n => n.User)
+                .WithMany()
+                .HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(n => n.Post)
+                .WithMany()
+                .HasForeignKey(n => n.PostId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Restrict: Post→Comment Cascade와의 다중 캐스케이드 경로 충돌 회피
+            entity.HasOne(n => n.Comment)
+                .WithMany()
+                .HasForeignKey(n => n.CommentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(e => new { e.UserId, e.IsRead });
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt });
+            entity.HasIndex(e => e.CommentId);
+        });
+
+        // Report configuration
+        modelBuilder.Entity<Report>(entity =>
+        {
+            entity.HasOne(r => r.Post)
+                .WithMany()
+                .HasForeignKey(r => r.PostId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Restrict: Post→Comment Cascade와의 다중 캐스케이드 경로 충돌 회피
+            entity.HasOne(r => r.Comment)
+                .WithMany()
+                .HasForeignKey(r => r.CommentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(r => r.ReporterUser)
+                .WithMany()
+                .HasForeignKey(r => r.ReporterUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => new { e.PostId, e.CommentId, e.ReporterUserId });
+            entity.HasIndex(e => new { e.PostId, e.CommentId, e.ReporterIp });
         });
 
         // Seed initial roles

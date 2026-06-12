@@ -1,0 +1,149 @@
+@using Microsoft.Extensions.DependencyInjection
+@using Monster.WebApp.Models.Board
+@using Monster.WebApp.Services.Auth
+@using Monster.WebApp.Services.Board
+@using Monster.WebApp.Shared
+@inject IServiceScopeFactory ScopeFactory
+@inject NavigationManager NavigationManager
+@inject ILogger<NotificationBell> Logger
+@rendermode InteractiveServer
+
+@if (_userId != null)
+{
+    <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" LockScroll="true"
+             Class="mr-1" OpenChanged="OnMenuOpenChangedAsync">
+        <ActivatorContent>
+            <MudBadge Content="@_unreadCount" Color="Color.Error" Overlap="true" Max="99"
+                      Visible="@(_unreadCount > 0)">
+                <MudIconButton Icon="@Icons.Material.Outlined.Notifications" Color="Color.Inherit" />
+            </MudBadge>
+        </ActivatorContent>
+        <ChildContent>
+            <div class="notification-menu">
+                <div class="notification-menu-header">
+                    <MudText Typo="Typo.subtitle2">알림</MudText>
+                    @if (_unreadCount > 0)
+                    {
+                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="MarkAllAsReadAsync">전체 읽음</MudButton>
+                    }
+                </div>
+                <MudDivider />
+                @if (_recent == null || _recent.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4 text-center">새 알림이 없습니다.</MudText>
+                }
+                else
+                {
+                    @foreach (var notification in _recent)
+                    {
+                        <MudMenuItem OnClick="@(() => OpenNotificationAsync(notification))"
+                                     Class="@(notification.IsRead ? "notification-item" : "notification-item notification-item-unread")">
+                            <div class="d-flex align-start gap-3">
+                                <MudIcon Icon="@(notification.Type == NotificationType.CommentOnPost ? Icons.Material.Outlined.Comment : Icons.Material.Outlined.Reply)"
+                                         Size="Size.Small" Color="Color.Primary" Class="mt-1" />
+                                <div class="flex-1">
+                                    <MudText Typo="Typo.body2">@GetMessage(notification)</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="notification-item-title">@notification.Post.Title</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@TimeDisplayHelper.ToRelative(notification.CreatedAt)</MudText>
+                                </div>
+                            </div>
+                        </MudMenuItem>
+                    }
+                    <MudDivider />
+                    <MudMenuItem Href="/notifications" Class="text-center">
+                        <MudText Typo="Typo.body2" Color="Color.Primary">모두 보기</MudText>
+                    </MudMenuItem>
+                }
+            </div>
+        </ChildContent>
+    </MudMenu>
+}
+
+@code {
+    private int? _userId;
+    private int _unreadCount;
+    private List<Notification>? _recent;
+    private bool _isLoaded;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // 서킷 진입 시 1회 배지 로드 — 이후 갱신은 메뉴를 열 때 수행
+        // (페이지 이동마다 새 서킷에서 자연 갱신되므로 폴링 불필요)
+        if (firstRender && !_isLoaded)
+        {
+            _isLoaded = true;
+            try
+            {
+                using var scope = ScopeFactory.CreateScope();
+                _userId = scope.ServiceProvider.GetRequiredService<AuthService>().GetCurrentUserId();
+                if (_userId != null)
+                {
+                    var notificationService = scope.ServiceProvider.GetRequiredService<NotificationService>();
+                    _unreadCount = await notificationService.GetUnreadCountAsync(_userId.Value);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "알림 배지 로드 실패");
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnMenuOpenChangedAsync(bool isOpen)
+    {
+        if (!isOpen || _userId == null)
+            return;
+
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var notificationService = scope.ServiceProvider.GetRequiredService<NotificationService>();
+            _recent = await notificationService.GetRecentAsync(_userId.Value);
+            _unreadCount = await notificationService.GetUnreadCountAsync(_userId.Value);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "알림 목록 로드 실패");
+        }
+    }
+
+    private async Task OpenNotificationAsync(Notification notification)
+    {
+        if (_userId == null)
+            return;
+
+        if (!notification.IsRead)
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var notificationService = scope.ServiceProvider.GetRequiredService<NotificationService>();
+            await notificationService.MarkAsReadAsync(notification.Id, _userId.Value);
+            _unreadCount = Math.Max(0, _unreadCount - 1);
+        }
+
+        NavigationManager.NavigateTo($"/board/{notification.Post.Category.UrlSlug}/{notification.PostId}");
+    }
+
+    private async Task MarkAllAsReadAsync()
+    {
+        if (_userId == null)
+            return;
+
+        using var scope = ScopeFactory.CreateScope();
+        var notificationService = scope.ServiceProvider.GetRequiredService<NotificationService>();
+        await notificationService.MarkAllAsReadAsync(_userId.Value);
+        _unreadCount = 0;
+        if (_recent != null)
+        {
+            foreach (var notification in _recent)
+                notification.IsRead = true;
+        }
+    }
+
+    private static string GetMessage(Notification notification) => notification.Type switch
+    {
+        NotificationType.CommentOnPost => $"{notification.ActorNickname}님이 회원님의 게시글에 댓글을 남겼습니다.",
+        NotificationType.ReplyToComment => $"{notification.ActorNickname}님이 회원님의 댓글에 답글을 남겼습니다.",
+        _ => $"{notification.ActorNickname}님의 새 알림"
+    };
+}

@@ -2,7 +2,7 @@
 
 .NET 8.0 기반의 Blazor 웹 애플리케이션입니다. Interactive Server/WebAssembly 하이브리드 렌더링 모드를 사용하여 게시판 시스템과 사용자 관리 기능을 제공합니다.
 
-**최근 업데이트**: 2026-06-11
+**최근 업데이트**: 2026-06-12
 
 ## 주요 기능
 
@@ -20,7 +20,11 @@
 - 추천 기능 (사용자/IP 기반 중복 방지)
 - 페이지네이션 (10/20/50/100개, 페이지·검색 상태 URL 보존)
 - **검색 기능** - 게시글 제목/내용 검색
+- **통합 검색** - 전체 게시판 대상 검색 (`/search`, 접근 가능한 카테고리만 노출)
 - **공지 고정 기능** - 특정 게시글을 목록 상단에 고정 (Admin/SubAdmin 전용)
+- **인앱 알림** - 내 게시글에 댓글/내 댓글에 답글이 달리면 앱바 종 아이콘 배지 + 알림 목록 (`/notifications`)
+- **신고 기능** - 게시글/댓글 신고 (로그인/익명 모두 가능, 중복 신고 방지)
+- **프로필 활동 목록** - 내가 쓴 글/댓글 탭 (프로필 페이지)
 
 ### 인증 및 권한 관리
 - Cookie 기반 인증
@@ -39,6 +43,7 @@
 ### 관리자 기능
 - 사용자 관리 (생성, 수정, 역할 할당, **비밀번호 리셋**)
 - 카테고리 관리 (생성, 수정, 삭제, 활성화/비활성화)
+- **신고 관리** (`/admin/reports`, SubAdmin 이상) - 상태 필터, 처리/기각, 처리 시 대상 콘텐츠 삭제 옵션
 
 ### UI/UX 기능
 - **테마 설정** - 라이트/다크 모드 전환 (localStorage 저장)
@@ -156,17 +161,17 @@ Monster.WebApp/
 │   ├── Components/
 │   │   ├── Layout/                  # 레이아웃 컴포넌트
 │   │   └── Pages/                   # 페이지 컴포넌트
-│   │       ├── Account/             # 인증 페이지 (Login, Register, Logout)
-│   │       ├── Admin/               # 관리자 페이지 (Users, Categories)
-│   │       └── Board/               # 게시판 페이지
+│   │       ├── Account/             # 인증 페이지 (Login, Register, Logout, Notifications)
+│   │       ├── Admin/               # 관리자 페이지 (Users, Categories, Reports)
+│   │       └── Board/               # 게시판 페이지 (목록/상세/작성/수정, Search)
 │   ├── Controllers/                 # API 컨트롤러
 │   ├── Data/                        # DbContext
 │   ├── Models/                      # 데이터 모델
 │   │   ├── Auth/                    # User, Role, UserRole, CategoryAccess
-│   │   └── Board/                   # Category, Post, Comment, Attachment, PostVote
+│   │   └── Board/                   # Category, Post, Comment, Attachment, PostVote, Notification, Report
 │   ├── Services/                    # 비즈니스 로직
 │   │   ├── Auth/                    # AuthService, UserService, RoleService
-│   │   └── Board/                   # CategoryService, PostService, CommentService
+│   │   └── Board/                   # CategoryService, PostService, CommentService, NotificationService, ReportService
 │   └── Shared/                      # CustomTheme, AppConstants, PasswordValidator, HtmlContentHelper
 ├── Monster.WebApp.Client/           # 클라이언트 프로젝트 (WebAssembly)
 └── Monster.WebApp.Tests/            # xUnit 단위 테스트
@@ -212,6 +217,7 @@ Get-Process -Name dotnet -ErrorAction SilentlyContinue | Stop-Process -Force
 | `/board/{slug}/{postId}` | 게시글 상세 (댓글/답글) |
 | `/board/{slug}/{postId}/edit` | 게시글 수정 |
 | `/board/{slug}/write` | 게시글 작성 |
+| `/search` | 통합 검색 (접근 가능한 카테고리만) |
 
 ### 인증 페이지
 | 경로 | 설명 |
@@ -219,7 +225,8 @@ Get-Process -Name dotnet -ErrorAction SilentlyContinue | Stop-Process -Force
 | `/account/login` | 로그인 |
 | `/account/register` | 회원가입 |
 | `/account/logout` | 로그아웃 |
-| `/profile` | 내 프로필 |
+| `/profile` | 내 프로필 (내 글/댓글 목록 탭 포함) |
+| `/notifications` | 알림 목록 |
 
 ### 관리자 페이지 (Admin 역할 필요)
 | 경로 | 설명 |
@@ -227,6 +234,7 @@ Get-Process -Name dotnet -ErrorAction SilentlyContinue | Stop-Process -Force
 | `/admin` | 관리자 대시보드 |
 | `/admin/users` | 사용자 관리 |
 | `/admin/categories` | 카테고리 관리 |
+| `/admin/reports` | 신고 관리 (SubAdmin 이상) |
 | `/admin/settings` | 설정 (관리 페이지 바로가기) |
 
 ## 보안

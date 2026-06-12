@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Monster.WebApp.Data;
 using System.Security.Claims;
 
@@ -56,4 +58,18 @@ public static class TestHttpContext
         };
         return new HttpContextAccessor { HttpContext = httpContext };
     }
+}
+
+/// <summary>
+/// 테스트용 IWebHostEnvironment 스텁 — FileUploadService 생성자 충족용.
+/// WebRootPath는 임시 폴더를 가리키며, 파일 이동이 실제로 일어나지 않는 테스트에서 사용한다.
+/// </summary>
+public sealed class TestWebHostEnvironment : IWebHostEnvironment
+{
+    public string WebRootPath { get; set; } = Path.Combine(Path.GetTempPath(), "monster-tests-wwwroot");
+    public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
+    public string ApplicationName { get; set; } = "Monster.WebApp.Tests";
+    public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    public string ContentRootPath { get; set; } = Path.GetTempPath();
+    public string EnvironmentName { get; set; } = "Test";
 }

@@ -47,7 +47,8 @@ Get-Process -Name dotnet -ErrorAction SilentlyContinue | Stop-Process -Force
 - **Monster.WebApp.Client**: 클라이언트 프로젝트 - WebAssembly 전용 컴포넌트
 - **Monster.WebApp.Tests**: xUnit 테스트 프로젝트. 위치는 루트가 아닌 `Monster.WebApp/Monster.WebApp.Tests/` (서버 프로젝트 폴더와 나란히 중첩)
   - 순수 로직 테스트: PasswordValidatorTests, HtmlContentHelperTests
-  - 서비스 테스트: AuthServiceCanModifyContentTests, CategoryAccessServiceTests, CategoryServiceTests — SQLite in-memory 기반 (`TestInfrastructure.cs`의 `TestDbContextFactory`(EnsureCreated로 HasData 시드 포함) + `TestHttpContext` 헬퍼 사용. 새 서비스 테스트도 이 인프라를 재사용할 것)
+  - 서비스 테스트: AuthServiceCanModifyContentTests, CategoryAccessServiceTests, CategoryServiceTests, NotificationServiceTests, ReportServiceTests, PostServiceSearchTests, UserContentQueryTests — SQLite in-memory 기반 (`TestInfrastructure.cs`의 `TestDbContextFactory`(EnsureCreated로 HasData 시드 포함) + `TestHttpContext` 헬퍼 사용. 새 서비스 테스트도 이 인프라를 재사용할 것)
+  - `TestWebHostEnvironment`(TestInfrastructure.cs): `IWebHostEnvironment` 스텁 — FileUploadService를 요구하는 PostService/CommentService 생성용
 
 ### 렌더링 모드
 - **Server 프로젝트**: 서버 리소스(DB, 파일)가 필요한 컴포넌트, `[StreamRendering]`
@@ -56,7 +57,7 @@ Get-Process -Name dotnet -ErrorAction SilentlyContinue | Stop-Process -Force
 ### 서비스 레이어
 모든 DB 작업은 서비스 클래스(`Services/`)를 통해 수행. `Program.cs`에서 `AddScoped`로 등록.
 - **Auth**: `Services/Auth/` - AuthService, RoleService, UserService
-- **Board**: `Services/Board/` - CategoryService, CategoryAccessService, PostService, CommentService
+- **Board**: `Services/Board/` - CategoryService, CategoryAccessService, PostService, CommentService, NotificationService, ReportService
 - **공통**: `Services/FileUploadService.cs`
 
 **DbContext 이중 등록** (`Program.cs`): `AddDbContextFactory`(주 사용) + 하위 호환용 `AddScoped<ApplicationDbContext>`(팩토리에서 생성). 신규 서비스는 항상 `IDbContextFactory<ApplicationDbContext>`를 주입받아 사용할 것.
@@ -113,9 +114,9 @@ using var context = await _contextFactory.CreateDbContextAsync();
 
 **다이얼로그 Cascading Parameter** (필수):
 ```csharp
-// ✅ 올바른 방식
+// ✅ 올바른 방식 (7.16에는 IMudDialogInstance 인터페이스가 없음 — 8.x API이므로 클래스 타입 사용)
 [CascadingParameter]
-private IMudDialogInstance? MudDialog { get; set; }
+private MudDialogInstance? MudDialog { get; set; }
 
 private void Cancel() => MudDialog?.Cancel();
 private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
@@ -166,7 +167,7 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 
 ### 데이터 모델
 - **Auth**: User, Role, UserRole, CategoryAccess
-- **Board**: Category, Post, Comment, Attachment, PostVote
+- **Board**: Category, Post, Comment, Attachment, PostVote, Notification, Report
 - **댓글 중첩**: `Comment.ParentCommentId`(self-reference) + `Replies` 컬렉션으로 답글 트리 구성
 - **본문 형식**: `Post.IsHtml`/`Comment.IsHtml` — true면 새니타이즈된 HTML(리치 에디터), false면 레거시 평문. `Post.SearchText`는 태그 제거된 검색용 본문
 
@@ -175,9 +176,10 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 - 시드 변경 시 마이그레이션이 새로 생성되므로 주의
 
 ### 삭제 규칙
-- Post 삭제 → Comment/Attachment 자동 삭제 (Cascade)
+- Post 삭제 → Comment/Attachment/Notification/Report 자동 삭제 (Cascade)
 - Category 삭제 → 게시글 존재 시 불가 (Restrict)
-- User 삭제 → Post/Comment의 UserId null 설정 (SetNull)
+- User 삭제 → Post/Comment의 UserId null 설정 (SetNull), Notification은 Cascade(수신자 삭제 시 알림 무의미), Report.ReporterUserId는 SetNull
+- Notification/Report의 CommentId FK는 **Restrict** — Post→Comment Cascade와의 다중 캐스케이드 경로 충돌(SQL Server 1785) 회피. Report.ResolvedByUserId는 **FK 미설정**(같은 이유 — Users로 향하는 SET NULL FK 2개 불가), 처리자 표시는 `ResolvedByNickname` 스냅샷 사용
 
 ## 게시판 기능
 
@@ -186,6 +188,10 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 - **공지 고정**: `Post.IsPinned`/`PinnedAt` 필드. `PostService.TogglePinAsync()`로 토글 (Admin/SubAdmin 권한). 목록 정렬은 공지글(PinnedAt 최신순) → 일반글(CreatedAt 최신순), 공지글은 상단에 Primary 틴트 배경 + 좌측 액센트 바 + "공지" 칩 표시(`post-list-item-pinned`)
 - **카테고리 접근 제어**: `CategoryAccess` 모델 + `CategoryAccessService` (N+1 회피 위해 전체 로딩 후 메모리 필터링). **목록(PostList)·상세(PostDetail)·수정(PostEdit)·작성(PostWrite) 페이지 모두 `CanAccessCategoryAsync`/`CanWriteToCategoryAsync` 검증 필수** — 새 게시글 노출 경로를 추가할 때 반드시 포함할 것. 홈의 최근/인기 글은 완전 공개 카테고리(`IsPublic && !RequireAuth`)만 집계
 - **검색**: `/board/{slug}` 목록에서 지원. HTML 글(`IsHtml=true`)은 태그 제거본(`Post.SearchText`)으로, 레거시 평문 글은 `Content`로 검색 (`(p.SearchText ?? p.Content).Contains(q)`)
+- **통합 검색**: `/search` (앱바 검색 아이콘) — `PostService.SearchPostsAsync(query, accessibleCategoryIds, ...)`로 제목+본문 전역 검색. **접근 가능한 카테고리 Id 목록을 쿼리 술어로 선필터** — 호출 페이지가 `CategoryAccessService.GetAccessibleCategoriesAsync()`로 목록을 구해 전달(비공개 카테고리 글은 제목조차 노출 금지 — "새 게시글 노출 경로" 규칙의 적용 사례). 검색어/페이지는 URL 쿼리(`q`/`page`) 보존
+- **인앱 알림**: 내 게시글에 댓글 / 내 댓글에 답글이 달리면 생성 (`NotificationService.CreateForCommentAsync` — CommentService.CreateCommentAsync에서 try/catch로 격리 호출, 알림 실패가 댓글 등록을 깨지 않음). 수신자가 익명 작성물이거나 본인 행동이면 미생성. UI는 앱바 `NotificationBell`(서킷 진입 시 1회 + 메뉴 열 때 재로드 — 폴링/SignalR 없음) + `/notifications` 페이지. `MarkAsReadAsync`는 userId 일치 검증 필수(타인 알림 조작 차단). 정리: 생성 시 기회적 삭제(읽은 지 30일 경과 + 사용자당 500건 초과분)
+- **신고**: 게시글/댓글 신고 (`ReportService.CreateReportAsync` — PostDetail의 신고 버튼/다이얼로그). 신고자는 로그인=UserId / 익명=IP, 중복 신고는 서비스 레벨 `AnyAsync` 검사(VotePostAsync 패턴). 댓글 신고도 PostId를 항상 저장(이동 링크용). 처리는 `/admin/reports`(SubAdmin 이상) — Resolve/Dismiss 모두 서비스에서 `IsSubAdminOrHigher()` 재검증(TogglePinAsync 패턴), 처리 시 "콘텐츠 삭제" 옵션은 대상 soft-delete + 동일 대상 대기 신고 일괄 처리. NavMenu의 Admin 섹션은 신고 관리만 SubAdmin에게 노출
+- **프로필 활동 목록**: `/profile` 하단 탭(내 게시글/내 댓글) — `PostService.GetPostsByUserAsync`/`CommentService.GetCommentsByUserAsync`(삭제 글·삭제 댓글·삭제된 글의 댓글 제외). 댓글 요약은 태그 제거 평문 절삭만 표시(`MarkupString` 금지). 내 댓글 탭은 첫 활성화 시 지연 로드
 - **페이지네이션**: `PostList.razor`에서 MudPagination + 페이지 크기 선택 (기본 20). 페이지/크기/검색어는 URL 쿼리(`page`/`size`/`q`)로 보존 — 뒤로가기/새로고침 시 상태 유지
 - **카테고리별 게시글 수 표시**: 반드시 `CategoryService.GetPostCountsByCategoryAsync()`(GroupBy 카운트 프로젝션, soft-delete 제외)로 집계 — 카테고리 목록 쿼리에 `Include(c => c.Posts)`를 추가하지 말 것(게시글 본문 전체가 메모리에 로드됨). 사용처: 관리자 카테고리 관리, 홈 게시판 바로가기. 글 없는 카테고리는 딕셔너리에 키가 없으므로 `GetValueOrDefault`로 0 처리
 - **카테고리 관리(Admin)**: `/admin/categories`는 비활성 포함 전체 카테고리 표시(`GetAllCategoriesAsync` — 비활성도 목록에 남아야 UI로 재활성화 가능). 홈 게시판 바로가기는 활성만(`GetAllActiveCategoriesAsync`)
@@ -203,12 +209,15 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 | `/board/{slug}/{postId}/edit` | 게시글 수정 | 작성자/비밀번호 또는 관리자 |
 | `/account/access-denied` | 접근 거부 | 공개 |
 | `/board/{slug}/write` | 게시글 작성 | 공개 |
+| `/search` | 통합 검색 (접근 가능 카테고리만) | 공개 |
 | `/account/login` | 로그인 | 공개 |
 | `/account/register` | 회원가입 | 공개 |
-| `/profile` | 내 프로필 | 로그인 |
+| `/profile` | 내 프로필 (활동 목록 탭 포함) | 로그인 |
+| `/notifications` | 알림 목록 | 로그인 |
 | `/admin` | 관리자 대시보드 | Admin |
 | `/admin/users` | 사용자 관리 | Admin |
 | `/admin/categories` | 카테고리 관리 | Admin |
+| `/admin/reports` | 신고 관리 | SubAdmin 이상 |
 | `/admin/settings` | 설정 (관리 페이지 바로가기) | Admin |
 
 ## 로깅
