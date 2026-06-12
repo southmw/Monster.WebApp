@@ -15,7 +15,9 @@
 <MudLayout>
     <MudAppBar Elevation="0" Class="app-header">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
-        <MudLink Href="/" Underline="Underline.None" Class="ml-3 app-brand">Southmw<span class="app-brand-dot">.</span></MudLink>
+        <MudLink Href="/" Underline="Underline.None" Class="ml-3 app-brand">
+            <img src="@(_isDarkMode ? "Logo_d.png" : "Logo_l.png")" alt="Southmw" class="app-brand-logo" />
+        </MudLink>
         <MudSpacer />
 
         @if (IsUserAuthenticated())
@@ -64,7 +66,8 @@
             </Authorized>
             <NotAuthorized>
                 <MudButton Href="/account/login" Variant="Variant.Text" Color="Color.Inherit" Class="mr-2">로그인</MudButton>
-                <MudButton Href="/account/register" Variant="Variant.Filled" Color="Color.Primary" DropShadow="false">회원가입</MudButton>
+                @* 모바일(<600px)에서는 앱바 폭 부족으로 숨김 — 회원가입 진입은 홈 히어로 '시작하기'와 로그인 페이지 링크로 충분 *@
+                <MudButton Href="/account/register" Variant="Variant.Filled" Color="Color.Primary" DropShadow="false" Class="d-none d-sm-flex">회원가입</MudButton>
             </NotAuthorized>
         </AuthorizeView>
     </MudAppBar>

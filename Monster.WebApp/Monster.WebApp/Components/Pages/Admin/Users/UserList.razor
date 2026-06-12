@@ -45,7 +45,7 @@
                 </MudGrid>
 
                 <!-- Users Table -->
-                <MudTable Items="@_users" Hover="true" Dense="true" Class="mt-4">
+                <MudTable Items="@_users" Hover="true" Dense="true" Class="mt-4" Breakpoint="Breakpoint.Sm">
                     <HeaderContent>
                         <MudTh>ID</MudTh>
                         <MudTh>사용자명</MudTh>
@@ -177,7 +177,8 @@
             { x => x.DisplayName, user.DisplayName }
         };
 
-        var dialog = await DialogService.ShowAsync<EditUserDialog>("사용자 정보 수정", parameters);
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<EditUserDialog>("사용자 정보 수정", parameters, options);
         var result = await dialog.Result;
 
         if (!result.Canceled)
@@ -195,7 +196,8 @@
             { x => x.Username, user.Username }
         };
 
-        var dialog = await DialogService.ShowAsync<ManageRolesDialog>("역할 관리", parameters);
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<ManageRolesDialog>("역할 관리", parameters, options);
         var result = await dialog.Result;
 
         if (!result.Canceled)
@@ -213,7 +215,8 @@
             { x => x.Username, user.Username }
         };
 
-        var dialog = await DialogService.ShowAsync<ResetPasswordDialog>("비밀번호 초기화", parameters);
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<ResetPasswordDialog>("비밀번호 초기화", parameters, options);
         var result = await dialog.Result;
 
         if (!result.Canceled)

@@ -130,6 +130,7 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 ### UI 디자인 규칙 (디자인 시스템)
 - **방향**: 모던·심플 — Slate 캔버스 + Indigo 단일 액센트. 사이드바는 모드별 톤 추종(라이트=Slate 50+테두리 구분 / 다크=어둡게), 히어로 캔버스(`home-hero`)만 다크 고정 액센트
 - **폰트**: Pretendard Variable (App.razor에서 jsdelivr CDN 로드, CustomTheme Typography에 지정)
+- **로고**: 앱바 브랜드는 이미지 로고 — `wwwroot/Logo_l.png`(라이트)/`Logo_d.png`(다크), MainLayout에서 `_isDarkMode`로 src 분기. 높이는 layout.css `.app-brand-logo`(데스크톱 32px/모바일 26px)
 - **커스텀 테마**: [Shared/CustomTheme.cs](Monster.WebApp/Monster.WebApp/Shared/CustomTheme.cs) — Primary Indigo(#6366F1/#818CF8), LinesDefault/Divider/TableLines 정의됨
 - **색상 하드코딩 금지**: CSS는 MudBlazor 팔레트 변수(`var(--mud-palette-*)`)를 사용해 라이트/다크 자동 대응. 소프트 틴트는 `color-mix(in srgb, var(--mud-palette-primary) N%, transparent)`로 파생. `.mud-theme-light`/`.mud-theme-dark` 분기 스타일은 팔레트 변수로 해결 불가할 때만 사용
 - **CSS 파일 구성** (wwwroot): `css/layout.css`(앱바·사이드바·푸터·NavMenu), `css/custom.css`(페이지·카드·게시판·댓글·에디터), `css/account.css`(인증 페이지), `app.css`(폼 유효성)
@@ -145,6 +146,14 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 - **게시글 목록**: MudTable이 아닌 div 기반 리스트(`post-list`/`post-list-item`) — 모바일 대응. 공지글은 `post-list-item-pinned` + `post-pin-chip`
 - 입력 폼: `Margin="Margin.Dense"`, `MudGrid Spacing="1"`
 - 인라인 `Style=` 사용 자제 — 색상/굵기는 테마와 CSS 클래스로 해결 (h4~h6 굵기는 테마 Typography에 정의됨)
+
+### 모바일 대응 규칙
+- **브레이크포인트 관례**: CSS는 `@media (max-width: 600px)` 단일 기준 (custom.css에 목록용 블록 + 말미의 상세/댓글/작성 폼 통합 블록, layout.css 푸터, account.css 인증 컨테이너)
+- **압축 가능한 버튼 행**: `MudStack Row` 컨테이너에 `Wrap="Wrap.Wrap"` + 버튼에 `white-space: nowrap` 필수 — 미적용 시 flex 압축으로 **한글 레이블이 한 글자씩 세로로 꺾임** (PostDetail `post-actions`, PostWrite/PostEdit `form-actions` 패턴 참조. `Wrap` 파라미터는 7.16에 존재)
+- **게시글 목록 행**: 모바일에서 `.post-list-main`을 전폭(flex-basis 100%)으로 내려 제목이 통계 배지에 압축되지 않게 함 — `.post-list-item` 공유처(PostList/Search/Profile 활동 탭)에 일괄 적용됨
+- **관리자 테이블**: 모든 `MudTd`에 `DataLabel` 필수(스택 카드 뷰 전제). `MudTable.Breakpoint` 기본값은 `Xs`(600px 미만 스택) — 열이 많은(≥6열) 테이블은 `Breakpoint="Breakpoint.Sm"`으로 상향해 600~959px 구간도 스택 표시
+- **다이얼로그**: `DialogService.ShowAsync`에 항상 `DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }`(또는 적정 크기) 전달 — 미전달 시 모바일에서 폭이 과도하게 좁아짐
+- **앱바**: 360px에 아이콘 4개 + 텍스트 버튼 2개가 물리적으로 안 들어감 — 비로그인 시 회원가입 버튼은 모바일에서 숨김(`d-none d-sm-flex`, 진입은 홈 히어로 '시작하기'·로그인 페이지 링크로 대체). 앱바에 텍스트 버튼을 추가할 때는 모바일 폭을 반드시 계산할 것 (`.app-header .mud-button`에 nowrap 적용됨 — layout.css)
 
 ### 비밀번호 필드 UX
 비밀번호 필드에는 표시/숨김 토글 기능 구현:

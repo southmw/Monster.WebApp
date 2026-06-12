@@ -11,14 +11,23 @@
 }
 
 .app-brand {
-    font-size: 1.125rem;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    color: var(--mud-palette-appbar-text) !important;
+    display: flex;
+    align-items: center;
+}
+
+.app-brand-logo {
+    display: block;
+    height: 32px;
+    width: auto;
 }
 
 .app-brand-dot {
     color: var(--mud-palette-primary);
+}
+
+/* 앱바 텍스트 버튼(로그인 등) — flex 압축 시 한글 레이블 세로 쪼개짐 방지 */
+.app-header .mud-button {
+    white-space: nowrap;
 }
 
 /* ===== Main / Footer ===== */
@@ -67,6 +76,10 @@
 }
 
 @media (max-width: 600px) {
+    .app-brand-logo {
+        height: 26px;
+    }
+
     .app-footer-inner {
         flex-direction: column;
         align-items: flex-start;

@@ -402,8 +402,25 @@
         flex: 1;
     }
 
+    /* 통계 배지를 별도 행으로 내려 제목이 전체 폭을 쓰도록 */
     .post-list-item {
         padding: 12px 16px;
+        flex-wrap: wrap;
+        gap: 4px 16px;
+    }
+
+    .post-list-main {
+        flex-basis: 100%;
+        min-width: 100%;
+    }
+
+    .post-list-stats {
+        gap: 10px;
+    }
+
+    .post-list-title-row .mud-chip {
+        max-width: 110px;
+        overflow: hidden;
     }
 
     .post-paging {
@@ -452,6 +469,15 @@
     min-width: 16px;
 }
 
+/* 액션 버튼 행 — Wrap 허용 컨테이너. nowrap으로 flex 압축 시 한글 레이블 세로 쪼개짐 방지 */
+.post-actions {
+    margin-bottom: 32px;
+}
+
+.post-actions .mud-button {
+    white-space: nowrap;
+}
+
 .comment-count {
     color: var(--mud-palette-primary);
 }
@@ -480,6 +506,14 @@
     border: 1px solid var(--mud-palette-lines-default);
 }
 
+/* 답글 들여쓰기 (답글 폼 + 답글 목록 공용) */
+.comment-reply {
+    margin-left: 32px;
+    margin-top: 12px;
+    padding-left: 12px;
+    border-left: 2px solid var(--mud-palette-lines-default);
+}
+
 /* ===== 게시글 작성/수정 ===== */
 .write-container {
     border-radius: 12px;
@@ -490,6 +524,20 @@
 
 .form-section {
     margin-bottom: 1px;
+}
+
+/* 익명 작성자/비밀번호 필드 — 데스크톱 미관용 폭 제한 (모바일에서는 전폭) */
+.write-compact-field {
+    max-width: 250px;
+}
+
+/* 폼 하단 등록/취소 버튼 행 */
+.form-actions {
+    margin-top: 16px;
+}
+
+.form-actions .mud-button {
+    white-space: nowrap;
 }
 
 /* ===== Compact Input (공용) ===== */
@@ -729,10 +777,46 @@
     box-shadow: inset 3px 0 0 var(--mud-palette-primary);
 }
 
+.notification-item .flex-1 {
+    min-width: 0;
+}
+
 .notification-item-title {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 280px;
+    max-width: 100%; /* 부모 폭 추종 — 고정 280px은 데스크톱에서도 불필요한 절삭 유발 */
+}
+
+/* ===== 모바일 (≤600px) — 게시글 상세/댓글/작성 폼 ===== */
+@media (max-width: 600px) {
+    .post-actions .mud-button {
+        padding: 6px 10px;
+    }
+
+    .comment-section {
+        padding: 16px 12px;
+    }
+
+    .comment-form {
+        padding: 16px 12px;
+    }
+
+    .comment-item {
+        padding: 12px;
+    }
+
+    .comment-reply {
+        margin-left: 8px;
+        padding-left: 8px;
+    }
+
+    .write-compact-field {
+        max-width: none;
+    }
+
+    .home-feed-header {
+        flex-wrap: wrap;
+    }
 }

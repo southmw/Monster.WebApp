@@ -47,14 +47,14 @@
                 <MudGrid Spacing="1" Class="form-section">
                     <MudItem xs="12" sm="6">
                         <MudTextField @bind-Value="authorNickname" Label="작성자" Variant="Variant.Outlined"
-                                      Required="true" MaxLength="50" FullWidth="false" Style="max-width: 250px;"
-                                      Class="compact-input" Margin="Margin.Dense" />
+                                      Required="true" MaxLength="50" FullWidth="true"
+                                      Class="compact-input write-compact-field" Margin="Margin.Dense" />
                     </MudItem>
                     <MudItem xs="12" sm="6">
                         <MudTextField @bind-Value="password" Label="비밀번호" Variant="Variant.Outlined"
                                       Required="true" InputType="InputType.Password"
-                                      HelperText="게시글 수정/삭제 시 필요합니다" FullWidth="false" Style="max-width: 250px;"
-                                      Class="compact-input" Margin="Margin.Dense" />
+                                      HelperText="게시글 수정/삭제 시 필요합니다" FullWidth="true"
+                                      Class="compact-input write-compact-field" Margin="Margin.Dense" />
                     </MudItem>
                 </MudGrid>
             }
@@ -89,7 +89,7 @@
                 </div>
             }
 
-            <MudButtonGroup Size="Size.Medium" Style="margin-top: 16px;">
+            <MudButtonGroup Size="Size.Medium" Class="form-actions">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary"
                            OnClick="SubmitPost" Disabled="isSubmitting"
                            StartIcon="@Icons.Material.Outlined.Send">

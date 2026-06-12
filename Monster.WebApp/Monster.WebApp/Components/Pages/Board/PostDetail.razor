@@ -84,7 +84,7 @@
             </div>
         </div>
 
-        <MudStack Row="true" Spacing="2" Style="margin-bottom: 32px;">
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="post-actions">
             <MudButtonGroup Variant="Variant.Outlined">
                 <MudButton Color="Color.Success" OnClick="VotePost" StartIcon="@Icons.Material.Outlined.ThumbUp">추천</MudButton>
                 <MudButton Color="Color.Primary" Href="@($"/board/{CategoryUrl}")" StartIcon="@Icons.Material.Outlined.List">목록</MudButton>
@@ -224,7 +224,7 @@
 
                     @if (replyToCommentId == comment.Id)
                     {
-                        <div style="margin-left: 32px; margin-top: 12px; padding-left: 12px; border-left: 2px solid var(--mud-palette-lines-default);">
+                        <div class="comment-reply">
                             <MudGrid Spacing="1">
                                 @if (!IsLoggedIn)
                                 {
@@ -267,7 +267,7 @@
 
                     @foreach (var reply in post.Comments.Where(c => c.ParentCommentId == comment.Id))
                     {
-                        <div style="margin-left: 32px; margin-top: 12px; padding-left: 12px; border-left: 2px solid var(--mud-palette-lines-default);">
+                        <div class="comment-reply">
                             <div class="d-flex justify-space-between align-center">
                                 <MudText Typo="Typo.body2" Style="font-weight: 600;">
                                     <MudIcon Icon="@Icons.Material.Outlined.SubdirectoryArrowRight" Size="Size.Small" Color="Color.Secondary" Style="vertical-align: middle;" />
