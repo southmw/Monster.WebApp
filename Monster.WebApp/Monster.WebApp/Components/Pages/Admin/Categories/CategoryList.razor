@@ -55,7 +55,7 @@
                         <MudTd DataLabel="URL Slug">@context.UrlSlug</MudTd>
                         <MudTd DataLabel="설명">@(string.IsNullOrEmpty(context.Description) ? "-" : context.Description)</MudTd>
                         <MudTd DataLabel="순서">@context.DisplayOrder</MudTd>
-                        <MudTd DataLabel="게시글 수">@context.Posts.Count(p => !p.IsDeleted)</MudTd>
+                        <MudTd DataLabel="게시글 수">@_postCounts.GetValueOrDefault(context.Id)</MudTd>
                         <MudTd DataLabel="상태">
                             <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">
                                 @(context.IsActive ? "활성" : "비활성")
@@ -83,6 +83,7 @@
 @code {
     private bool _isLoading = true;
     private List<Category> _categories = new();
+    private Dictionary<int, int> _postCounts = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -95,7 +96,8 @@
         _isLoading = true;
         StateHasChanged();
 
-        _categories = await CategoryService.GetAllActiveCategoriesAsync();
+        _categories = await CategoryService.GetAllCategoriesAsync();
+        _postCounts = await CategoryService.GetPostCountsByCategoryAsync();
 
         _isLoading = false;
         StateHasChanged();

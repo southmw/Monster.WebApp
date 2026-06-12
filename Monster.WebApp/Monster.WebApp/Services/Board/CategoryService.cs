@@ -35,9 +35,23 @@ public class CategoryService
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Categories
             .AsNoTracking()
-            .Include(c => c.Posts)
             .OrderBy(c => c.DisplayOrder)
             .ToListAsync();
+    }
+
+    /// <summary>
+    /// 카테고리별 게시글 수 집계 (soft-delete 제외).
+    /// 게시글이 없는 카테고리는 키가 없으므로 GetValueOrDefault로 0 처리할 것.
+    /// </summary>
+    public async Task<Dictionary<int, int>> GetPostCountsByCategoryAsync()
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Posts
+            .AsNoTracking()
+            .Where(p => !p.IsDeleted)
+            .GroupBy(p => p.CategoryId)
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Key, x => x.Count);
     }
 
     public async Task<List<Category>> GetAccessibleCategoriesAsync(int? userId = null)

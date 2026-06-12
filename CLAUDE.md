@@ -47,7 +47,7 @@ Get-Process -Name dotnet -ErrorAction SilentlyContinue | Stop-Process -Force
 - **Monster.WebApp.Client**: 클라이언트 프로젝트 - WebAssembly 전용 컴포넌트
 - **Monster.WebApp.Tests**: xUnit 테스트 프로젝트. 위치는 루트가 아닌 `Monster.WebApp/Monster.WebApp.Tests/` (서버 프로젝트 폴더와 나란히 중첩)
   - 순수 로직 테스트: PasswordValidatorTests, HtmlContentHelperTests
-  - 서비스 테스트: AuthServiceCanModifyContentTests, CategoryAccessServiceTests — SQLite in-memory 기반 (`TestInfrastructure.cs`의 `TestDbContextFactory`(EnsureCreated로 HasData 시드 포함) + `TestHttpContext` 헬퍼 사용. 새 서비스 테스트도 이 인프라를 재사용할 것)
+  - 서비스 테스트: AuthServiceCanModifyContentTests, CategoryAccessServiceTests, CategoryServiceTests — SQLite in-memory 기반 (`TestInfrastructure.cs`의 `TestDbContextFactory`(EnsureCreated로 HasData 시드 포함) + `TestHttpContext` 헬퍼 사용. 새 서비스 테스트도 이 인프라를 재사용할 것)
 
 ### 렌더링 모드
 - **Server 프로젝트**: 서버 리소스(DB, 파일)가 필요한 컴포넌트, `[StreamRendering]`
@@ -187,6 +187,8 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 - **카테고리 접근 제어**: `CategoryAccess` 모델 + `CategoryAccessService` (N+1 회피 위해 전체 로딩 후 메모리 필터링). **목록(PostList)·상세(PostDetail)·수정(PostEdit)·작성(PostWrite) 페이지 모두 `CanAccessCategoryAsync`/`CanWriteToCategoryAsync` 검증 필수** — 새 게시글 노출 경로를 추가할 때 반드시 포함할 것. 홈의 최근/인기 글은 완전 공개 카테고리(`IsPublic && !RequireAuth`)만 집계
 - **검색**: `/board/{slug}` 목록에서 지원. HTML 글(`IsHtml=true`)은 태그 제거본(`Post.SearchText`)으로, 레거시 평문 글은 `Content`로 검색 (`(p.SearchText ?? p.Content).Contains(q)`)
 - **페이지네이션**: `PostList.razor`에서 MudPagination + 페이지 크기 선택 (기본 20). 페이지/크기/검색어는 URL 쿼리(`page`/`size`/`q`)로 보존 — 뒤로가기/새로고침 시 상태 유지
+- **카테고리별 게시글 수 표시**: 반드시 `CategoryService.GetPostCountsByCategoryAsync()`(GroupBy 카운트 프로젝션, soft-delete 제외)로 집계 — 카테고리 목록 쿼리에 `Include(c => c.Posts)`를 추가하지 말 것(게시글 본문 전체가 메모리에 로드됨). 사용처: 관리자 카테고리 관리, 홈 게시판 바로가기. 글 없는 카테고리는 딕셔너리에 키가 없으므로 `GetValueOrDefault`로 0 처리
+- **카테고리 관리(Admin)**: `/admin/categories`는 비활성 포함 전체 카테고리 표시(`GetAllCategoriesAsync` — 비활성도 목록에 남아야 UI로 재활성화 가능). 홈 게시판 바로가기는 활성만(`GetAllActiveCategoriesAsync`)
 - **관리자 비밀번호 리셋**: 사용자 관리(UserList)에서 재설정 (`Components/Pages/Admin/Users/ResetPasswordDialog.razor`)
 - **익명 글 수정 비밀번호 전달**: PostDetail → PostEdit 이동 시 비밀번호를 `Services/Board/PostEditVerificationState`(서킷 범위 scoped, 1회 소비)로 전달. **URL 쿼리로 비밀번호를 전달하지 말 것** (브라우저 히스토리/로그 노출). 수정 페이지 직접 진입/새로고침 시에는 상세 페이지에서 다시 비밀번호 확인 필요
 
