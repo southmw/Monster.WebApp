@@ -42,8 +42,9 @@ namespace Monster.WebApp
             builder.Host.UseSerilog();
 
             // Add DbContext with Factory for Blazor Server concurrency support
-            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-            Log.Debug($"ConnectionString: {connectionString}");
+            var sqlConfigString = builder.Environment.IsDevelopment() ? "RemoteConnection" : "DefaultConnection";
+            var connectionString = builder.Configuration.GetConnectionString(sqlConfigString);
+            Log.Information($"SqlConfigString: {sqlConfigString}");
             builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
                 options.UseSqlServer(connectionString));
             // Also register DbContext for backward compatibility
