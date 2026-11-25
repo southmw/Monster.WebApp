@@ -31,6 +31,11 @@ dotnet ef database update --project Monster.WebApp/Monster.WebApp/Monster.WebApp
 
 **개발 서버**: http://localhost:5104 (HTTP), https://localhost:7056 (HTTPS)
 
+**운영(프로덕션) 호스팅**: [MonsterASP.NET](https://www.monsterasp.net/) 무료 플랜 — http://southmw.runasp.net/
+- **HTTP 전용**(HTTPS 미지원) → 프로덕션 appsettings에 `Auth:AllowInsecureHttpCookies=true` 필요 (아래 "인증 시스템"의 쿠키 보안 참조)
+- 프로덕션 환경은 `ConnectionStrings:DefaultConnection` 사용, 마이그레이션 자동 적용 없음 → 스키마 변경 시 배포 전 `dotnet ef database update` 수동 실행
+- Publish 프로필(`Properties/PublishProfiles`)은 저장소에 없음
+
 **프로세스 관리 (Windows)**:
 ```powershell
 # dotnet 프로세스 확인
@@ -43,16 +48,17 @@ Get-Process -Name dotnet -ErrorAction SilentlyContinue | Stop-Process -Force
 ## 아키텍처
 
 ### 프로젝트 구조
-- **Monster.WebApp**: 서버 프로젝트 - DB 접근, API, 레이아웃, 대부분의 페이지
-- **Monster.WebApp.Client**: 클라이언트 프로젝트 - WebAssembly 전용 컴포넌트
+- **Monster.WebApp**: 서버 프로젝트 - DB 접근, API, 레이아웃, 모든 페이지/컴포넌트
+- **Monster.WebApp.Client**: 클라이언트 프로젝트 - 현재 `Program.cs`/`_Imports.razor`만 있는 빈 껍데기(컴포넌트 없음)
 - **Monster.WebApp.Tests**: xUnit 테스트 프로젝트. 위치는 루트가 아닌 `Monster.WebApp/Monster.WebApp.Tests/` (서버 프로젝트 폴더와 나란히 중첩)
-  - 순수 로직 테스트: PasswordValidatorTests, HtmlContentHelperTests
+  - 순수 로직 테스트: PasswordValidatorTests, HtmlContentHelperTests, ContentSanitizerTests
   - 서비스 테스트: AuthServiceCanModifyContentTests, CategoryAccessServiceTests, CategoryServiceTests, NotificationServiceTests, ReportServiceTests, PostServiceSearchTests, UserContentQueryTests — SQLite in-memory 기반 (`TestInfrastructure.cs`의 `TestDbContextFactory`(EnsureCreated로 HasData 시드 포함) + `TestHttpContext` 헬퍼 사용. 새 서비스 테스트도 이 인프라를 재사용할 것)
   - `TestWebHostEnvironment`(TestInfrastructure.cs): `IWebHostEnvironment` 스텁 — FileUploadService를 요구하는 PostService/CommentService 생성용
 
 ### 렌더링 모드
-- **Server 프로젝트**: 서버 리소스(DB, 파일)가 필요한 컴포넌트, `[StreamRendering]`
-- **Client 프로젝트**: `@rendermode InteractiveAuto` 또는 `InteractiveWebAssembly` 컴포넌트
+- **전역 InteractiveServer**: `App.razor`에서 `<Routes @rendermode="InteractiveServer" />` — 사실상 모든 페이지가 Blazor Server 서킷에서 동작하며 서비스(DB)를 직접 주입받아 사용. 개별 페이지의 `@rendermode InteractiveServer` 선언은 중복이지만 관례로 유지
+- 관리자 다이얼로그 일부(`Admin/**/*Dialog.razor`)에 `@rendermode InteractiveAuto`가 선언돼 있으나 서버 프로젝트에 위치하며 서버 서킷 내에서 렌더링됨 — WASM 전용 컴포넌트를 새로 만들 때만 Client 프로젝트에 배치(서버 서비스 주입 불가)
+- **로그인 쿠키 발급 경로**: Blazor Server 서킷(WebSocket)에서는 응답 쿠키를 설정할 수 없으므로 `Login.razor` → JS interop `loginUser`(`wwwroot/js/auth.js`) → `fetch('/api/auth/login')`(AuthController)로 브라우저가 직접 호출해 쿠키를 받음. 인증 상태를 바꾸는 흐름을 추가할 때도 같은 패턴(HTTP 요청 경유) 필요
 
 ### 서비스 레이어
 모든 DB 작업은 서비스 클래스(`Services/`)를 통해 수행. `Program.cs`에서 `AddScoped`로 등록.
@@ -169,7 +175,7 @@ private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 ## 데이터베이스
 
 - **DB**: SQL Server 2022 with EF Core 8.0.11
-- **연결**: `appsettings.json` → `ConnectionStrings:DefaultConnection`
+- **연결**: 환경별로 연결 문자열 키가 다름 (`Program.cs`) — 개발(Development)=`ConnectionStrings:RemoteConnection`, 그 외=`ConnectionStrings:DefaultConnection`. launchSettings의 두 프로필 모두 Development이므로 로컬 실행 시 `RemoteConnection`이 필요 (`appsettings.json.template`/README 예시에는 `DefaultConnection`만 있음 — 새 클론 시 직접 추가)
 - **주의**: `appsettings.json`은 Git에 추적되지 않음 (DB 자격증명 포함). 새 클론 시 직접 생성 필요 — 형식은 README.md의 "데이터베이스 설정" 참조
 - **비밀번호 해싱**: BCrypt.Net-Next 4.0.3
 - **읽기 쿼리**: 모든 서비스의 조회 전용 메서드는 `.AsNoTracking()` 사용 (수정 후 SaveChanges 하는 메서드는 제외)
